@@ -565,7 +565,8 @@ async function onConnectRequest(m) {
     receiveFiles(pc.createDataChannel('files'), sess);
   }
   let boosted;
-  watchPath(sess, pc, ({ lan }) => {
+  watchPath(sess, pc, ({ lan, details }) => {
+    if (hostSess === sess) $('#hostText').textContent = `${fmt(m.from)} is connected to this computer (${level === 'control' ? 'full control' : 'view only'}) · ${details}`;
     if (boosted === lan) return;
     boosted = lan;
     const params = sender.getParameters();
@@ -652,9 +653,25 @@ function watchPath(sess, pc, report) {
     let pair;
     stats.forEach((s) => { if (s.type === 'transport' && s.selectedCandidatePairId) pair = stats.get(s.selectedCandidatePairId); });
     if (!pair) return;
+    const local = stats.get(pair.localCandidateId), remote = stats.get(pair.remoteCandidateId);
+    let rtp;
+    stats.forEach((s) => { if (s.type === 'inbound-rtp' && s.kind === 'video' || s.type === 'outbound-rtp' && s.kind === 'video') rtp = s; });
+    const parts = [local?.candidateType === 'relay' || remote?.candidateType === 'relay' ? 'relay' : 'direct'];
+    if (rtp) {
+      const codec = rtp.codecId && stats.get(rtp.codecId)?.mimeType?.replace('video/', '');
+      if (codec) parts.push(codec);
+      if (rtp.frameWidth) parts.push(`${rtp.frameWidth}x${rtp.frameHeight}`);
+      if (rtp.framesPerSecond !== undefined) parts.push(`${Math.round(rtp.framesPerSecond)} fps`);
+      if (rtp.jitterBufferEmittedCount) parts.push(`buffer ${Math.round(rtp.jitterBufferDelay / rtp.jitterBufferEmittedCount * 1000)} ms`);
+      if (rtp.framesDecoded) parts.push(`decode ${Math.round(rtp.totalDecodeTime / rtp.framesDecoded * 1000)} ms`);
+      if (rtp.packetsLost) parts.push(`${rtp.packetsLost} lost`);
+      if (rtp.encoderImplementation) parts.push(`encoder ${rtp.encoderImplementation}`);
+      if (rtp.qualityLimitationReason && rtp.qualityLimitationReason !== 'none') parts.push(`limited by ${rtp.qualityLimitationReason}`);
+    }
     report({
-      lan: JiriSession.isLanPath(stats.get(pair.localCandidateId), stats.get(pair.remoteCandidateId)),
+      lan: JiriSession.isLanPath(local, remote),
       ms: pair.currentRoundTripTime === undefined ? null : Math.round(pair.currentRoundTripTime * 1000),
+      details: parts.join(' · '),
     });
   };
   sess.pathTimer = setInterval(() => check().catch(() => {}), 3000);
@@ -773,8 +790,8 @@ async function onOffer(m) {
     video.srcObject.addTrack(ev.track);
     video.muted = videoMuted;
   };
-  watchPath(sess, pc, ({ lan, ms }) => {
-    $('#viewInfo').textContent = `${fmt(sess.peer)} · ${levelText} · ${lan ? 'Same network' : 'Remote network'}${ms === null ? '' : ` · ${ms} ms`}`;
+  watchPath(sess, pc, ({ lan, ms, details }) => {
+    $('#viewInfo').textContent = `${fmt(sess.peer)} · ${levelText} · ${lan ? 'Same network' : 'Remote network'}${ms === null ? '' : ` · ${ms} ms`} · ${details}`;
   });
   video.onplaying = () => {
     if (viewSess !== sess) return;
@@ -1262,7 +1279,7 @@ ${''}    <div class="group"><input id="serverAccessKey" type="password" maxlengt
     <h3>Individual settings</h3>
     <div class="group">${chk('perDesk', 'Remember the view mode for each computer')}</div>`,
   About: () => `<h2>About JiriDesk</h2>
-    <div class="group">${row('Version', '0.3.2')}</div>
+    <div class="group">${row('Version', '0.3.3')}</div>
     <p class="hint">Remote desktop for personal use.</p>`,
 };
 let currentPage = 'General';
