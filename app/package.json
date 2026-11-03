@@ -1,6 +1,6 @@
 {
   "name": "jiridesk",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "description": "JiriDesk remote desktop",
   "main": "boot.js",
   "scripts": {
@@ -59,6 +59,14 @@
       "extendInfo": {
         "NSScreenCaptureUsageDescription": "JiriDesk shares your screen with the remote computer you choose."
       }
-    }
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "JewwySy",
+        "repo": "JiriDesk",
+        "releaseType": "release"
+      }
+    ]
   }
 }

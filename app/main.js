@@ -112,7 +112,10 @@ const DEFAULTS = {
   syncClipboard: true,
   runAsAdmin: false,
   quality: 'balanced', // balanced | quality | speed
-  fit: true,
+  viewMode: 'shrink', // original | shrink | stretch
+  startFullscreen: false,
+  perDesk: true, // remember the view mode for each computer
+  hardwareAcceleration: true, // applied when JiriDesk starts
   recent: [],
 };
 const CHOICES = {
@@ -120,14 +123,20 @@ const CHOICES = {
   interactive: ['ask', 'never'],
   profile: ['view', 'control', 'unattended'],
   quality: ['balanced', 'quality', 'speed'],
+  viewMode: ['original', 'shrink', 'stretch'],
 };
-const FLAGS = ['startWithWindows', 'notifications', 'sound', 'trayOnClose', 'allowPassword', 'rememberHistory', 'saveThumbnails', 'syncClipboard', 'fit'];
+const FLAGS = ['startWithWindows', 'notifications', 'sound', 'trayOnClose', 'allowPassword', 'rememberHistory', 'saveThumbnails', 'syncClipboard', 'startFullscreen', 'perDesk', 'hardwareAcceleration'];
 
 const configPath = () => path.join(app.getPath('userData'), 'config.json');
 function loadConfig() {
   let saved = null;
   try { saved = JSON.parse(fs.readFileSync(configPath(), 'utf8')); } catch { /* first run */ }
-  if (saved) return { ...DEFAULTS, ...saved, server: migrateServers(saved.server ?? DEFAULTS.server) };
+  if (saved) {
+    // Older versions stored "fit to window" as a yes/no.
+    if (!saved.viewMode && saved.fit === false) saved.viewMode = 'original';
+    delete saved.fit;
+    return { ...DEFAULTS, ...saved, server: migrateServers(saved.server ?? DEFAULTS.server) };
+  }
   const cfg = {
     ...DEFAULTS,
     id: String(crypto.randomInt(100000000, 1000000000)),
@@ -140,6 +149,9 @@ function saveConfig(cfg) {
   fs.mkdirSync(path.dirname(configPath()), { recursive: true });
   fs.writeFileSync(configPath(), JSON.stringify(cfg, null, 2));
 }
+
+// Must run before the app is ready.
+if (loadConfig().hardwareAcceleration === false) app.disableHardwareAcceleration();
 
 ipcMain.handle('get-config', () => loadConfig());
 ipcMain.handle('set-config', (_e, patch) => {

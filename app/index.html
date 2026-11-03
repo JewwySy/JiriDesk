@@ -138,7 +138,8 @@
   .stage { flex:1; min-height:0; background:#000; position:relative; overflow:auto; }
   .stage video { display:block; outline:none; cursor:default; opacity:0; transition:opacity .45s; }
   .stage video.live { opacity:1; }
-  .stage.fit video { width:100%; height:100%; object-fit:contain; }
+  .stage.shrink video { width:100%; height:100%; object-fit:contain; }
+  .stage.stretch video { width:100%; height:100%; object-fit:fill; }
   .waiting { position:absolute; inset:0; display:flex; flex-direction:column; gap:14px; align-items:center; justify-content:center; color:#c9ccd4; transition:opacity .3s, visibility 0s; }
   .waiting.off { opacity:0; visibility:hidden; transition:opacity .3s, visibility 0s linear .3s; }
   .spin { width:24px; height:24px; border-radius:50%; border:2px solid #ffffff26; border-top-color:var(--accent); animation:spin .8s linear infinite; }
@@ -182,6 +183,10 @@
   input[type=checkbox]:checked { background:var(--accent); }
   input[type=checkbox]:checked::after { transform:translateX(14px); }
   input[type=checkbox]:disabled { opacity:.45; cursor:default; }
+  input[type=radio] { appearance:none; position:relative; width:16px; height:16px; margin:0; border-radius:50%; border:2px solid var(--line-strong); cursor:pointer; flex:none; transition:border-color var(--base); }
+  input[type=radio]::after { content:""; position:absolute; inset:2px; border-radius:50%; background:var(--accent); transform:scale(0); transition:transform var(--base) var(--ease); }
+  input[type=radio]:checked { border-color:var(--accent); }
+  input[type=radio]:checked::after { transform:scale(1); }
   select, .pane input[type=text], .pane input[type=password], .box input { width:100%; height:34px; padding:0 10px; background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:8px; outline:0; transition:border-color var(--base), box-shadow var(--base); }
   select:focus, .pane input:focus, .box input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
   select { width:auto; min-width:190px; cursor:pointer; }
@@ -377,7 +382,7 @@ async function init() {
   admin = await window.native.adminStatus();
   $('#myId').textContent = fmt(cfg.id);
   applyTheme();
-  applyFit();
+  applyView();
   renderCards(true);
   page('General');
   connectWs();
@@ -583,6 +588,8 @@ async function onConnectRequest(m) {
   const params = sender.getParameters();
   if (params.encodings && params.encodings[0]) {
     params.encodings[0].maxBitrate = q.bitrate;
+    // When the link is slow, drop sharpness rather than frames, so the picture keeps up instead of lagging behind.
+    params.degradationPreference = 'maintain-framerate';
     sender.setParameters(params).catch(() => {});
   }
 }
@@ -714,7 +721,8 @@ function startConnect(id) {
 }
 
 function beginSession(id, password) {
-  viewSess = { peer: id, pc: null, ice: [], password };
+  viewSess = { peer: id, pc: null, ice: [], password, viewMode: viewModeFor(id) };
+  applyView();
   $('#viewInfo').textContent = `Connecting to ${fmt(id)}`;
   $('#waitingText').textContent = password ? 'Connecting…' : 'Waiting for the other computer to accept…';
   $('#waiting').classList.remove('off');
@@ -722,6 +730,8 @@ function beginSession(id, password) {
   $('#tabSession').classList.remove('gone');
   show('session');
   toWs({ type: 'connect-request', to: id, auth: Boolean(password), quality: cfg.quality });
+  // Runs inside the click that started the connection, which full screen requires.
+  if (cfg.startFullscreen && !document.fullscreenElement) $('#fullBtn').click();
 }
 
 async function sendPassword(m) {
@@ -758,6 +768,7 @@ async function onOffer(m) {
   const levelText = sess.level === 'control' ? 'Full control' : 'View only';
   pc.ontrack = (ev) => {
     ev.receiver.jitterBufferTarget = 0; // show each frame as soon as it arrives
+    if ('playoutDelayHint' in ev.receiver) ev.receiver.playoutDelayHint = 0;
     if (!video.srcObject) video.srcObject = new MediaStream();
     video.srcObject.addTrack(ev.track);
     video.muted = videoMuted;
@@ -892,9 +903,11 @@ function attachControls(dc, sess) {
   window.onblur = releaseKeys;
   const pos = (e) => {
     // Account for letterboxing (object-fit: contain) so coordinates map to the real screen.
+    // Stretch fills the whole window, so there is no letterboxing to remove.
     const r = v.getBoundingClientRect();
+    const stretched = $('#stage').classList.contains('stretch');
     const scale = Math.min(r.width / v.videoWidth, r.height / v.videoHeight);
-    const w = v.videoWidth * scale, h = v.videoHeight * scale;
+    const w = stretched ? r.width : v.videoWidth * scale, h = stretched ? r.height : v.videoHeight * scale;
     const x = (e.clientX - r.left - (r.width - w) / 2) / w;
     const y = (e.clientY - r.top - (r.height - h) / 2) / h;
     return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
@@ -956,14 +969,28 @@ function detachControls() {
   $('#monitorPick').onchange = null;
 }
 
-function applyFit() {
-  $('#stage').classList.toggle('fit', cfg.fit);
-  const label = cfg.fit ? 'Actual size' : 'Fit to window';
-  $('#fitBtn').dataset.tip = label;
-  $('#fitBtn').setAttribute('aria-label', label);
-  $('#fitIcon').setAttribute('href', cfg.fit ? '#i-shrink' : '#i-expand');
+// Original shows the picture at its real size and scrolls. Shrink fits it inside the window. Stretch fills the window.
+const VIEW_MODES = ['shrink', 'stretch', 'original'];
+const VIEW_LABELS = { original: 'Original', shrink: 'Optimize display (shrink)', stretch: 'Optimize screen usage (stretch)' };
+const VIEW_ICONS = { original: '#i-monitor', shrink: '#i-shrink', stretch: '#i-expand' };
+const deskOf = (id) => cfg.recent.find((r) => r.id === id);
+const viewModeFor = (id) => (cfg.perDesk && deskOf(id)?.viewMode) || cfg.viewMode;
+function applyView() {
+  const mode = viewSess ? viewSess.viewMode : cfg.viewMode;
+  const stage = $('#stage');
+  VIEW_MODES.forEach((m) => stage.classList.toggle(m, m === mode));
+  const next = VIEW_LABELS[VIEW_MODES[(VIEW_MODES.indexOf(mode) + 1) % VIEW_MODES.length]];
+  $('#fitBtn').dataset.tip = `View: ${VIEW_LABELS[mode]}. Click for ${next}`;
+  $('#fitBtn').setAttribute('aria-label', `View mode: ${VIEW_LABELS[mode]}`);
+  $('#fitIcon').setAttribute('href', VIEW_ICONS[mode]);
 }
-$('#fitBtn').onclick = async () => { cfg = await window.native.setConfig({ fit: !cfg.fit }); applyFit(); };
+$('#fitBtn').onclick = async () => {
+  const mode = VIEW_MODES[(VIEW_MODES.indexOf(viewSess.viewMode) + 1) % VIEW_MODES.length];
+  viewSess.viewMode = mode;
+  if (cfg.perDesk && deskOf(viewSess.peer)) saveRecent(cfg.recent.map((r) => (r.id === viewSess.peer ? { ...r, viewMode: mode } : r)), false);
+  else if (!cfg.perDesk) cfg = await window.native.setConfig({ viewMode: mode });
+  applyView();
+};
 
 // ---------- recent sessions ----------
 async function saveRecent(recent, render = true) {
@@ -973,7 +1000,7 @@ async function saveRecent(recent, render = true) {
 function remember(id) {
   if (!cfg.rememberHistory) return;
   const old = cfg.recent.find((r) => r.id === id) || { id, name: discovered.find((d) => d.id === id)?.name || '', fav: false };
-  saveRecent([{ ...old, lastAt: Date.now() }, ...cfg.recent.filter((r) => r.id !== id)]);
+  saveRecent([{ ...old, lastAt: Date.now(), ...(cfg.perDesk && viewSess ? { viewMode: viewSess.viewMode } : {}) }, ...cfg.recent.filter((r) => r.id !== id)]);
   online.add(id);
 }
 function saveThumb(sess) {
@@ -1158,6 +1185,7 @@ const row = (label, control, cls = '') => `<div class="row ${cls}"><span>${label
 const chk = (key, label) => `<label class="row"><span>${label}</span><input type="checkbox" data-flag="${key}" ${cfg[key] ? 'checked' : ''}></label>`;
 const soon = (label) => row(label, '<span class="soon">soon</span><input type="checkbox" disabled>', 'off');
 const sel = (key, opts) => `<select data-choice="${key}">${opts.map(([v, l]) => `<option value="${v}" ${cfg[key] === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+const radios = (key, opts) => opts.map(([v, l]) => `<label class="row"><span>${l}</span><input type="radio" name="${key}" data-choice="${key}" value="${v}" ${cfg[key] === v ? 'checked' : ''}></label>`).join('');
 const tool = (id, icon, tip, cls = '') => `<button class="ib ${cls}" id="${id}" data-tip="${tip}" aria-label="${tip}">${ic(icon)}</button>`;
 const adminHelp = () => {
   if (cfg.runAsAdmin && !admin.active) return 'Admin control could not start. Restart JiriDesk, or turn this off and on again.';
@@ -1218,13 +1246,23 @@ ${''}    <div class="group"><input id="serverAccessKey" type="password" maxlengt
     </div>
     <p class="hint">Thumbnails are small pictures of the other screen, stored only on this computer.</p>`,
   Display: () => `<h2>Display</h2>
+    <h3>Quality</h3>
     <div class="group">
-      ${row('Quality', sel('quality', [['balanced', 'Balanced'], ['quality', 'Best quality'], ['speed', 'Best speed']]))}
-      ${chk('fit', 'Fit remote screen to window')}
+      ${radios('quality', [['quality', 'Best quality'], ['balanced', 'Balanced'], ['speed', 'Best performance']])}
     </div>
-    <p class="hint">Quality applies from your next connection.</p>`,
+    <p class="hint">Quality applies from your next connection.</p>
+    <h3>View mode</h3>
+    <div class="group">
+      ${radios('viewMode', [['original', VIEW_LABELS.original], ['shrink', VIEW_LABELS.shrink], ['stretch', VIEW_LABELS.stretch]])}
+      ${chk('startFullscreen', 'Start new sessions in full-screen mode')}
+    </div>
+    <h3>Hardware acceleration</h3>
+    <div class="group">${chk('hardwareAcceleration', 'Use hardware acceleration')}</div>
+    <p class="hint">Takes effect after you restart JiriDesk.</p>
+    <h3>Individual settings</h3>
+    <div class="group">${chk('perDesk', 'Remember the view mode for each computer')}</div>`,
   About: () => `<h2>About JiriDesk</h2>
-    <div class="group">${row('Version', '0.3.0')}</div>
+    <div class="group">${row('Version', '0.3.2')}</div>
     <p class="hint">Remote desktop for personal use.</p>`,
 };
 let currentPage = 'General';
@@ -1261,7 +1299,7 @@ $('#pane').onchange = async (e) => {
   if (t.dataset.flag) cfg = await window.native.setConfig({ [t.dataset.flag]: t.checked });
   if (t.dataset.choice) cfg = await window.native.setConfig({ [t.dataset.choice]: t.value });
   applyTheme();
-  applyFit();
+  applyView();
 };
 $('#pane').onclick = async (e) => {
   const chip = e.target.closest('[data-profile]');
