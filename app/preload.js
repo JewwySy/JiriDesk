@@ -1,0 +1,26 @@
+const { contextBridge, ipcRenderer } = require('electron');
+
+contextBridge.exposeInMainWorld('native', {
+  getConfig: () => ipcRenderer.invoke('get-config'),
+  setConfig: (patch) => ipcRenderer.invoke('set-config', patch),
+  checkPassword: (p) => ipcRenderer.invoke('check-password', p),
+  adminStatus: () => ipcRenderer.invoke('admin-status'),
+  setRunAsAdmin: (on) => ipcRenderer.invoke('set-run-as-admin', on),
+  askPermission: (fromId, viewOnly) => ipcRenderer.invoke('ask-permission', fromId, viewOnly),
+  screenSources: () => ipcRenderer.invoke('screen-sources'),
+  setInputDisplay: (id) => ipcRenderer.send('set-input-display', id),
+  input: (ev) => ipcRenderer.send('input', ev),
+  releaseInput: () => ipcRenderer.send('release-input'),
+  copy: (text) => ipcRenderer.send('copy-text', text),
+  readClipboard: () => ipcRenderer.invoke('read-clipboard'),
+  fileStart: (name, size) => ipcRenderer.invoke('file-start', name, size),
+  fileChunk: (id, bytes) => ipcRenderer.invoke('file-chunk', id, bytes),
+  fileEnd: (id) => ipcRenderer.invoke('file-end', id),
+  fileAbortAll: () => ipcRenderer.invoke('file-abort-all'),
+  setChrome: (theme) => ipcRenderer.send('set-chrome', theme),
+  notify: (body) => ipcRenderer.send('notify', body),
+  updateStatus: () => ipcRenderer.invoke('update-status'),
+  onUpdateReady: callback => { ipcRenderer.on('update-ready', (_event, version) => callback(version)); },
+  installUpdate: () => ipcRenderer.invoke('install-update'),
+  exit: () => ipcRenderer.send('exit-app'),
+});

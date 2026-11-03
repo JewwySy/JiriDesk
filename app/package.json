@@ -1,0 +1,64 @@
+{
+  "name": "jiridesk",
+  "version": "0.3.0",
+  "description": "JiriDesk remote desktop",
+  "main": "boot.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis",
+    "dist:mac": "electron-builder --mac dmg --arm64 --x64",
+    "dist:release": "node release-windows.cjs"
+  },
+  "keywords": [],
+  "author": "Jerry",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "@nut-tree-fork/nut-js": "^4.2.6",
+    "electron-updater": "^6.8.11"
+  },
+  "devDependencies": {
+    "electron": "^45.2.1",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "com.jiridesk.app",
+    "productName": "JiriDesk",
+    "files": [
+      "boot.js",
+      "main.js",
+      "input.js",
+      "input-helper.js",
+      "preload.js",
+      "index.html",
+      "package.json",
+      "updates.js",
+      "servers.js",
+      "session.js",
+      "elevation.js",
+      "assets/**"
+    ],
+    "asarUnpack": [
+      "node_modules/@nut-tree-fork/**",
+      "node_modules/@nut-tree-fork/**/*.node"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    },
+    "artifactName": "JiriDesk-Setup.exe",
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.utilities",
+      "artifactName": "JiriDesk-${version}-${arch}.${ext}",
+      "extendInfo": {
+        "NSScreenCaptureUsageDescription": "JiriDesk shares your screen with the remote computer you choose."
+      }
+    }
+  }
+}

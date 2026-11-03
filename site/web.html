@@ -1,0 +1,519 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Reach your whole computer from a browser with its JiriDesk ID and password.">
+<title>JiriDesk Web</title>
+<link rel="stylesheet" href="style.css">
+<link rel="icon" type="image/png" href="jiridesk-favicon.png">
+<style>
+.web { display:grid; grid-template-columns:1fr minmax(0,420px); gap:64px; align-items:start; padding:72px 0 24px; }
+.web h1 { font-size:clamp(36px,5vw,56px); letter-spacing:-2px; }
+.web-form { background:var(--card); border:1px solid var(--line); border-radius:9px; padding:26px; }
+.web-form label { display:block; font-size:13px; color:var(--muted); margin:0 0 6px; }
+.web-form input { display:block; width:100%; background:var(--bg); color:var(--text); border:1px solid var(--line); border-radius:5px; padding:12px 14px; font:inherit; margin:0 0 18px; }
+.web-form input:focus-visible { outline:3px solid #ff7075; outline-offset:1px; }
+.web-form input#id { font-size:22px; letter-spacing:1px; font-variant-numeric:tabular-nums; }
+.web-form .btn { width:100%; cursor:pointer; }
+.web-form details { background:none; padding:0; margin:0 0 18px; font-size:14px; }
+.web-form details[open] summary { margin-bottom:14px; }
+.web-form summary { color:var(--muted); font-weight:500; }
+#status { min-height:22px; margin:14px 0 0; font-size:14px; color:#ff8589; }
+.web-list { color:var(--muted); font-size:15px; padding-left:20px; margin:24px 0 0; }
+#stage { position:fixed; inset:0; z-index:10; display:flex; flex-direction:column; background:#000; }
+#stage[hidden] { display:none; }
+#bar { display:flex; align-items:center; gap:8px; height:44px; padding:0 8px 0 16px; background:var(--bg); border-bottom:1px solid var(--line); font-size:13px; color:var(--muted); }
+#info { flex:1; min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#bar button { width:32px; height:32px; display:grid; place-items:center; background:none; color:var(--text); border:0; border-radius:5px; cursor:pointer; }
+#bar button[hidden], #monitor[hidden] { display:none; }
+#monitor { height:30px; padding:0 6px; background:var(--card); color:var(--text); border:1px solid var(--line); border-radius:5px; font:inherit; }
+#bar button:hover { background:var(--card); }
+#bar button.off { color:var(--muted); }
+#note { position:absolute; left:50%; bottom:20px; transform:translateX(-50%); max-width:90%; padding:8px 14px; background:var(--bg); border:1px solid var(--line); border-radius:5px; font-size:13px; color:var(--text); z-index:1; }
+#note[hidden] { display:none; }
+#end:hover { background:var(--accent); }
+#bar svg { width:17px; height:17px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+#screen { position:relative; flex:1; min-height:0; }
+#video { display:block; width:100%; height:100%; object-fit:contain; outline:none; }
+#waiting { position:absolute; inset:0; display:grid; place-items:center; color:var(--muted); font-size:15px; }
+#waiting[hidden] { display:none; }
+@media(max-width:760px) { .web { grid-template-columns:1fr; gap:32px; padding-top:40px; } }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="logo" href="index.html"><svg class="mark" viewBox="60 80 392 340" width="26" height="23" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="40" stroke-linecap="round" d="M198 150v-8a34 34 0 0 1 34-34h150a34 34 0 0 1 34 34v112a34 34 0 0 1-34 34h-4"/><rect x="76" y="186" width="282" height="218" rx="44" fill="#f0484a"/><path fill="#fff" stroke="#fff" stroke-width="16" stroke-linejoin="round" d="M162 244l118 50-48 16-18 50z"/></svg>Jiri<span>Desk</span></a>
+  <nav aria-label="Main navigation">
+    <a href="features.html">Features</a>
+    <a href="support.html">Support</a>
+    <a href="web.html" class="on">Web</a>
+    <a class="cta" href="download.html">Download</a>
+  </nav>
+</div></header>
+<main class="wrap">
+<section class="web">
+  <div>
+    <p class="eyebrow">NOTHING TO INSTALL HERE</p>
+    <h1>Your whole PC, in a browser tab.</h1>
+    <p class="intro">Enter the ID and password of the computer you want to reach. You get its full screen, mouse and keyboard.</p>
+    <ul class="web-list">
+      <li>The computer you reach needs the JiriDesk app installed and open.</li>
+      <li>Some shortcuts, such as Alt+Tab, may stay with this computer or browser.</li>
+      <li>Works with a mouse and keyboard. Touch control is not available yet.</li>
+      <li>Hear its sound, copy and paste text both ways, and drop files onto the screen to send them to its Downloads\JiriDesk folder.</li>
+    </ul>
+  </div>
+  <form class="web-form" id="form" autocomplete="off">
+    <label for="id">Computer ID</label>
+    <input id="id" inputmode="numeric" placeholder="123 456 789" maxlength="11" required>
+    <label for="password">Password</label>
+    <input id="password" type="password" placeholder="Blank asks the computer to accept" autocomplete="off">
+    <details id="advanced">
+      <summary>Server</summary>
+      <label for="server">Server address</label>
+      <input id="server" placeholder="wss://your-server" spellcheck="false">
+      <label for="key">Access key, if your server has one</label>
+      <input id="key" type="password" autocomplete="off">
+    </details>
+    <button class="btn" id="go">Connect</button>
+    <p id="status" role="alert"></p>
+  </form>
+</section>
+</main>
+<footer><div class="wrap">
+  <span>© 2026 JiriDesk</span>
+  <span><a href="download.html">Download</a><a href="support.html">Support</a><a href="privacy.html">Privacy</a></span>
+</div></footer>
+
+<div id="stage" hidden>
+  <div id="bar">
+    <span id="info"></span>
+    <select id="monitor" aria-label="Monitor" hidden></select>
+    <button id="mouse" type="button" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="2" width="12" height="20" rx="6"/><path id="mouseMark" d="M12 6v4"/></svg></button>
+    <button id="attach" type="button" aria-label="Send files" title="Send files" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg></button>
+    <button id="clip" type="button" aria-pressed="true" aria-label="Share clipboard" title="Share clipboard" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
+    <button id="mute" type="button" aria-label="Mute" title="Mute" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H2v6h4l5 4z"/><path id="muteMark" d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></svg></button>
+    <button id="full" type="button" aria-label="Full screen" title="Full screen"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+    <button id="end" type="button" aria-label="Disconnect" title="Disconnect"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div id="screen">
+    <video id="video" tabindex="0" autoplay muted playsinline></video>
+    <div id="waiting"></div>
+    <div id="note" role="status" hidden></div>
+  </div>
+  <input id="pick" type="file" multiple hidden>
+</div>
+
+<script>
+// Browser viewer: speaks the same signaling and control messages as the desktop app's viewer.
+const $ = (q) => document.querySelector(q);
+const stun = { urls: 'stun:stun.l.google.com:19302' };
+const fmt = (id) => String(id).replace(/(\d{3})(?=\d)/g, '$1 ');
+const load = (k) => { try { return localStorage.getItem(k) || ''; } catch { return ''; } };
+const save = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private window */ } };
+
+function newId() {
+  const id = String(100000000 + crypto.getRandomValues(new Uint32Array(1))[0] % 900000000);
+  save('jd-web-id', id);
+  return id;
+}
+let myId = load('jd-web-id') || newId();
+
+// A page on plain HTTP sits next to its server; a hosted HTTPS page has no server to assume.
+const nearby = location.protocol === 'http:' ? `ws://${location.hostname}:3001` : '';
+$('#server').value = load('jd-web-server') || nearby;
+if (!$('#server').value) $('#advanced').open = true;
+
+$('#id').oninput = (e) => { e.target.value = fmt(e.target.value.replace(/\D/g, '').slice(0, 9)); };
+
+let sess = null; // { peer, password, ws, pc, level, ice, retried }
+const send = (o) => sess && sess.ws.readyState === 1 && sess.ws.send(JSON.stringify(o));
+
+function serverProblem(server, key) {
+  if (!/^wss?:\/\/\S+$/.test(server)) return 'Enter a server address that starts with ws:// or wss://.';
+  const local = /^ws:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(server);
+  if (location.protocol === 'https:' && server.startsWith('ws://') && !local) return 'This page uses HTTPS, so the server address must start with wss://.';
+  if (key && !server.startsWith('wss://')) return 'An access key requires a wss:// server.';
+  return '';
+}
+
+$('#form').onsubmit = (e) => {
+  e.preventDefault();
+  $('#status').textContent = '';
+  const peer = $('#id').value.replace(/\D/g, '');
+  const server = $('#server').value.trim();
+  const key = $('#key').value;
+  if (peer.length !== 9) return void ($('#status').textContent = 'Enter a 9-digit ID.');
+  const problem = serverProblem(server, key);
+  if (problem) { $('#advanced').open = true; $('#status').textContent = problem; return; }
+  save('jd-web-server', server);
+  start(peer, $('#password').value, server, key);
+  $('#password').value = '';
+};
+
+function start(peer, password, server, key, retried = false) {
+  const ws = new WebSocket(server);
+  sess = { peer, password, ws, pc: null, level: null, ice: [], retried, rtc: { iceServers: [stun] }, server, key };
+  const mine = sess;
+  mine.giveUp = setTimeout(() => finish('Could not reach the server. Check the server address.', false), 15000);
+  $('#info').textContent = `Connecting to ${fmt(peer)}`;
+  $('#waiting').textContent = 'Connecting…';
+  $('#waiting').hidden = false;
+  $('#stage').hidden = false;
+  ws.onopen = () => { if (sess === mine) send({ type: 'register', id: myId, accessKey: key }); };
+  ws.onmessage = (e) => { if (sess === mine) onMsg(JSON.parse(e.data)); };
+  ws.onclose = () => { if (sess === mine && !mine.pc) finish(mine.registered ? 'Lost connection to the server.' : 'Could not reach the server. Check the server address.', false); };
+}
+
+async function onMsg(m) {
+  const s = sess;
+  switch (m.type) {
+    case 'registered':
+      s.registered = true;
+      clearTimeout(s.giveUp);
+      s.rtc = { iceServers: [stun, ...(m.iceServers || [])] };
+      $('#waiting').textContent = s.password ? 'Connecting…' : 'Waiting for the other computer to accept…';
+      send({ type: 'connect-request', to: s.peer, auth: Boolean(s.password), quality: 'balanced' });
+      return;
+    case 'ice-config': s.rtc = { iceServers: [stun, ...m.iceServers] }; return;
+    case 'error':
+      if (m.code === 'id-in-use' && !s.retried) {
+        // Another tab holds this browser's ID: take a fresh one and try once more.
+        const { peer, password, server, key } = s;
+        myId = newId();
+        cleanup(false);
+        return start(peer, password, server, key, true);
+      }
+      return finish(m.code === 'access-denied' ? 'The server refused the access key.' : 'The server refused this connection.', false);
+    case 'reject': if (m.from === s.peer) finish(m.reason || 'Connection declined.', false); return;
+    case 'accept':
+      if (m.from !== s.peer) return;
+      s.level = m.level;
+      if (s.auth) { s.auth.pc.close(); s.auth = null; }
+      $('#waiting').textContent = 'Accepted. Waiting for video…';
+      return;
+    case 'offer':
+      if (m.from !== s.peer) return;
+      if (m.auth) await sendPassword(m, s);
+      else await onOffer(m, s);
+      return;
+    case 'ice': {
+      if (m.from !== s.peer) return;
+      const target = m.auth ? s.auth : s;
+      if (!target) return;
+      if (target.pc && target.pc.remoteDescription) await target.pc.addIceCandidate(m.candidate).catch(() => {});
+      else target.ice.push(m.candidate);
+      return;
+    }
+    case 'bye': if (m.from === s.peer) finish('The other computer ended the session.', false);
+  }
+}
+
+// Signaling can be plain ws:// on the same network, so a password only travels inside an encrypted data channel.
+async function sendPassword(m, s) {
+  if (!s.password) return;
+  const pc = new RTCPeerConnection(s.rtc);
+  s.auth = { pc, ice: [] };
+  pc.ondatachannel = (ev) => {
+    const dc = ev.channel;
+    const sendIt = () => { dc.send(s.password); s.password = ''; };
+    if (dc.readyState === 'open') sendIt();
+    else dc.onopen = sendIt;
+  };
+  pc.onicecandidate = (ev) => ev.candidate && send({ type: 'ice', auth: true, to: s.peer, candidate: ev.candidate });
+  await pc.setRemoteDescription(m.sdp);
+  s.auth.ice.splice(0).forEach((c) => pc.addIceCandidate(c).catch(() => {}));
+  await pc.setLocalDescription(await pc.createAnswer());
+  send({ type: 'answer', auth: true, to: s.peer, sdp: pc.localDescription });
+}
+
+async function onOffer(m, s) {
+  const pc = new RTCPeerConnection(s.rtc);
+  s.pc = pc;
+  const video = $('#video');
+  pc.ontrack = (ev) => {
+    ev.receiver.jitterBufferTarget = 0; // show each frame as soon as it arrives
+    if (!video.srcObject) video.srcObject = new MediaStream();
+    video.srcObject.addTrack(ev.track);
+    if (ev.track.kind === 'audio') {
+      $('#mute').hidden = false;
+      applySound();
+    }
+  };
+  video.onplaying = () => {
+    if (sess !== s) return;
+    $('#waiting').hidden = true;
+    $('#info').textContent = `${fmt(s.peer)} · ${s.level === 'control' ? 'Full control' : 'View only'}`;
+    video.focus();
+  };
+  pc.ondatachannel = (ev) => {
+    if (s.level !== 'control') return;
+    if (ev.channel.label === 'files') attachFiles(ev.channel, s);
+    else attachControls(ev.channel, s);
+  };
+  pc.onicecandidate = (ev) => ev.candidate && send({ type: 'ice', to: s.peer, candidate: ev.candidate });
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed' && sess === s) finish('The connection failed. The two networks could not reach each other.');
+  };
+  await pc.setRemoteDescription(m.sdp);
+  s.ice.splice(0).forEach((c) => pc.addIceCandidate(c).catch(() => {}));
+  await pc.setLocalDescription(await pc.createAnswer());
+  send({ type: 'answer', to: s.peer, sdp: pc.localDescription });
+}
+
+const note = (text) => {
+  const n = $('#note');
+  n.textContent = text;
+  n.hidden = false;
+  clearTimeout(note.t);
+  note.t = setTimeout(() => { n.hidden = true; }, 4000);
+};
+
+// ---------- sound ----------
+let muted = load('jd-web-muted') === '1';
+function showMuted() {
+  const label = muted ? 'Unmute' : 'Mute';
+  $('#mute').title = label;
+  $('#mute').setAttribute('aria-label', label);
+  $('#muteMark').setAttribute('d', muted ? 'M22 9l-6 6M16 9l6 6' : 'M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13');
+}
+function applySound() {
+  const v = $('#video');
+  v.muted = muted;
+  showMuted();
+  if (muted) return;
+  // A browser may refuse sound until the page is clicked. The picture must keep playing either way.
+  v.play().catch(() => {
+    v.muted = true;
+    v.play().catch(() => {});
+    muted = true;
+    showMuted();
+    note('Click the speaker to turn on sound.');
+  });
+}
+$('#mute').onclick = () => {
+  muted = !muted;
+  save('jd-web-muted', muted ? '1' : '0');
+  applySound();
+  $('#video').focus();
+};
+
+// ---------- clipboard ----------
+const MAX_CLIPBOARD_CHARS = 60000; // stays under the data channel's message limit
+let shareClipboard = load('jd-web-clipboard') !== '0';
+$('#clip').classList.toggle('off', !shareClipboard);
+$('#clip').setAttribute('aria-pressed', String(shareClipboard));
+$('#clip').onclick = () => {
+  shareClipboard = !shareClipboard;
+  save('jd-web-clipboard', shareClipboard ? '1' : '0');
+  $('#clip').classList.toggle('off', !shareClipboard);
+  $('#clip').setAttribute('aria-pressed', String(shareClipboard));
+  note(shareClipboard ? 'Clipboard sharing is on.' : 'Clipboard sharing is off.');
+  $('#video').focus();
+};
+function copyWithoutApi(text) {
+  const onCopy = (e) => { e.clipboardData.setData('text/plain', text); e.preventDefault(); };
+  document.addEventListener('copy', onCopy);
+  try { return document.execCommand('copy'); } catch { return false; } finally { document.removeEventListener('copy', onCopy); }
+}
+// A page on plain HTTP has no clipboard API, and copying then needs a recent click or key press.
+async function receiveClipboard(text, s) {
+  if (!shareClipboard || typeof text !== 'string') return;
+  try {
+    await navigator.clipboard.writeText(text);
+    s.pendingCopy = null;
+  } catch {
+    s.pendingCopy = copyWithoutApi(text) ? null : text;
+  }
+}
+const retryCopy = (s) => {
+  if (s.pendingCopy !== null && s.pendingCopy !== undefined && copyWithoutApi(s.pendingCopy)) s.pendingCopy = null;
+};
+document.addEventListener('paste', (e) => { if (sess && sess.onPaste) sess.onPaste(e); });
+
+// ---------- files ----------
+const FILE_CHUNK = 64 * 1024;
+function attachFiles(dc, s) {
+  dc.bufferedAmountLowThreshold = 1024 * 1024;
+  dc.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'saved') note(`Saved ${m.name} in Downloads\\JiriDesk on the other computer.`);
+    if (m.type === 'failed') note('The other computer could not save the file.');
+  };
+  let queue = Promise.resolve();
+  s.sendFiles = (files) => {
+    for (const file of files) queue = queue.then(() => sendFile(dc, s, file)).catch(() => note(`Could not send ${file.name}.`));
+  };
+  $('#attach').hidden = false;
+}
+async function sendFile(dc, s, file) {
+  dc.send(JSON.stringify({ type: 'start', name: file.name, size: file.size }));
+  let shown = 0;
+  for (let from = 0; from < file.size; from += FILE_CHUNK) {
+    if (sess !== s || dc.readyState !== 'open') return;
+    if (dc.bufferedAmount > 4 * 1024 * 1024) await new Promise((r) => { dc.onbufferedamountlow = r; });
+    const to = Math.min(from + FILE_CHUNK, file.size);
+    dc.send(await file.slice(from, to).arrayBuffer());
+    if (performance.now() - shown > 1000) {
+      shown = performance.now();
+      note(`Sending ${file.name}: ${Math.floor(to / file.size * 100)}%`);
+    }
+  }
+  dc.send(JSON.stringify({ type: 'end' }));
+}
+$('#attach').onclick = () => $('#pick').click();
+$('#pick').onchange = (e) => {
+  if (sess && sess.sendFiles) sess.sendFiles([...e.target.files]);
+  e.target.value = '';
+  $('#video').focus();
+};
+// Without this, dropping a file anywhere makes the browser leave the page and open it.
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => {
+  e.preventDefault();
+  if (sess && sess.sendFiles && e.target.closest && e.target.closest('#screen')) sess.sendFiles([...e.dataTransfer.files]);
+});
+
+function attachControls(dc, s) {
+  const v = $('#video');
+  v.style.cursor = 'crosshair';
+  const out = (o) => dc.readyState === 'open' && dc.send(JSON.stringify(o));
+  dc.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'clipboard') receiveClipboard(m.text, s);
+    if (m.type === 'monitors') {
+      const pick = $('#monitor');
+      pick.replaceChildren(...m.list.map((d, n) => new Option(d.width ? `${d.label} (${d.width}x${d.height})` : d.label, String(n))));
+      pick.value = String(m.current);
+      pick.hidden = m.list.length < 2;
+    }
+  };
+  $('#monitor').onchange = (e) => {
+    out({ type: 'monitor', index: Number(e.target.value) });
+    v.focus();
+  };
+  $('#clip').hidden = false;
+  // Ctrl+V waits for the browser's paste event, so the remote computer has the new text before the key arrives.
+  let pasteWait = null;
+  const sendHeldPaste = () => {
+    if (pasteWait === null) return;
+    clearTimeout(pasteWait);
+    pasteWait = null;
+    keys.add('KeyV');
+    out({ type: 'keydown', code: 'KeyV' });
+  };
+  s.onPaste = (e) => {
+    if (pasteWait === null || !shareClipboard) return;
+    const text = e.clipboardData ? e.clipboardData.getData('text/plain') : '';
+    if (text && text.length <= MAX_CLIPBOARD_CHARS) out({ type: 'clipboard', text });
+    sendHeldPaste();
+  };
+  const pos = (e) => {
+    // Account for letterboxing (object-fit: contain) so coordinates map to the real screen.
+    const r = v.getBoundingClientRect();
+    const scale = Math.min(r.width / v.videoWidth, r.height / v.videoHeight);
+    const w = v.videoWidth * scale, h = v.videoHeight * scale;
+    const x = (e.clientX - r.left - (r.width - w) / 2) / w;
+    const y = (e.clientY - r.top - (r.height - h) / 2) / h;
+    return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+  };
+  // Anything still held when focus leaves would stay stuck down on the remote computer.
+  const keys = new Set(), buttons = new Set();
+  s.release = () => {
+    keys.forEach((code) => out({ type: 'keyup', code }));
+    buttons.forEach((button) => out({ type: 'up', button, x: s.lastX, y: s.lastY }));
+    keys.clear(); buttons.clear();
+  };
+  const at = (e) => { const p = pos(e); s.lastX = p.x; s.lastY = p.y; return p; };
+  // With the remote mouse off, this computer's mouse only moves here, so it can leave the page freely.
+  let mouseOn = true, shortcutHeld = false;
+  const setMouse = (on, announce = true) => {
+    mouseOn = on;
+    if (!on) {
+      buttons.forEach((button) => out({ type: 'up', button, x: s.lastX, y: s.lastY }));
+      buttons.clear();
+    }
+    const label = `Remote mouse ${on ? 'on' : 'off'} (Ctrl+Alt+M)`;
+    $('#mouse').title = label;
+    $('#mouse').setAttribute('aria-label', label);
+    $('#mouse').setAttribute('aria-pressed', String(on));
+    $('#mouse').classList.toggle('off', !on);
+    $('#mouseMark').setAttribute('d', on ? 'M12 6v4' : 'M12 6v4M3 3l18 18');
+    v.style.cursor = on ? 'crosshair' : 'default';
+    if (announce) note(on ? 'Remote mouse is on.' : 'Remote mouse is off. Your mouse stays on this computer.');
+  };
+  setMouse(true, false);
+  $('#mouse').hidden = false;
+  $('#mouse').onclick = () => { setMouse(!mouseOn); v.focus(); };
+  let lastMove = 0;
+  v.onmousemove = (e) => { if (!mouseOn) return; const t = performance.now(); if (t - lastMove > 16) { lastMove = t; out({ type: 'move', ...at(e) }); } };
+  v.onmousedown = (e) => { v.focus(); if (!mouseOn || e.button > 2) return; buttons.add(e.button); out({ type: 'down', button: e.button, ...at(e) }); };
+  v.onmouseup = (e) => { retryCopy(s); if (!mouseOn || e.button > 2) return; buttons.delete(e.button); out({ type: 'up', button: e.button, ...at(e) }); };
+  v.oncontextmenu = (e) => e.preventDefault();
+  v.onwheel = (e) => { e.preventDefault(); if (mouseOn) out({ type: 'wheel', dy: e.deltaY, dx: e.deltaX, ...at(e) }); };
+  v.onkeydown = (e) => {
+    if (e.code === 'KeyM' && e.ctrlKey && e.altKey) {
+      e.preventDefault();
+      if (!e.repeat) setMouse(!mouseOn);
+      shortcutHeld = true;
+      return;
+    }
+    const paste = e.code === 'KeyV' && (e.ctrlKey || e.metaKey) && !e.altKey;
+    if (paste && shareClipboard) {
+      // Not prevented: the browser only fires its paste event if this key press goes through.
+      if (pasteWait === null && !keys.has('KeyV')) pasteWait = setTimeout(sendHeldPaste, 150);
+      return;
+    }
+    e.preventDefault();
+    sendHeldPaste();
+    keys.add(e.code);
+    out({ type: 'keydown', code: e.code });
+  };
+  v.onkeyup = (e) => {
+    e.preventDefault();
+    if (e.code === 'KeyM' && shortcutHeld) { shortcutHeld = false; return; }
+    retryCopy(s);
+    sendHeldPaste();
+    keys.delete(e.code);
+    out({ type: 'keyup', code: e.code });
+  };
+  v.onblur = () => { sendHeldPaste(); s.release(); };
+}
+window.addEventListener('blur', () => sess && sess.release && sess.release());
+
+function cleanup(notify) {
+  const s = sess;
+  if (!s) return;
+  clearTimeout(s.giveUp);
+  if (s.release) s.release();
+  if (notify) send({ type: 'bye', to: s.peer });
+  sess = null;
+  if (s.auth) s.auth.pc.close();
+  if (s.pc) s.pc.close();
+  s.ws.close();
+  const v = $('#video');
+  v.srcObject = null;
+  v.style.cursor = 'default';
+  $('#attach').hidden = $('#clip').hidden = $('#mute').hidden = $('#note').hidden = $('#monitor').hidden = $('#mouse').hidden = true;
+  v.muted = true;
+  v.onplaying = v.onmousemove = v.onmousedown = v.onmouseup = v.oncontextmenu = v.onwheel = v.onkeydown = v.onkeyup = v.onblur = null;
+}
+function finish(text, notify = true) {
+  cleanup(notify);
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  $('#stage').hidden = true;
+  $('#status').textContent = text;
+}
+$('#end').onclick = () => finish('');
+$('#full').onclick = async () => {
+  if (document.fullscreenElement) return document.exitFullscreen();
+  await $('#stage').requestFullscreen().catch(() => {});
+  // Where the browser allows it, this sends shortcuts like Alt+Tab to the remote computer.
+  if (navigator.keyboard && navigator.keyboard.lock) navigator.keyboard.lock().catch(() => {});
+  $('#video').focus();
+};
+window.addEventListener('pagehide', () => cleanup(true));
+</script>
+</body>
+</html>

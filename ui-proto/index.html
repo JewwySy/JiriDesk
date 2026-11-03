@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JiriDesk UI prototype</title>
+<style>
+  :root { --bg:#1c1f26; --panel:#242832; --line:#343a47; --text:#e6e8ec; --muted:#8b93a1; --accent:#ef4444; --ok:#22c55e; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body { font-family:system-ui,sans-serif; background:var(--bg); color:var(--text); font-size:14px; display:flex; flex-direction:column; }
+  button { font:inherit; color:inherit; cursor:pointer; }
+
+  /* title/tab bar */
+  .tabs { display:flex; align-items:center; background:#14161b; padding:0 8px; height:38px; gap:4px; }
+  .brand { font-weight:800; margin-right:10px; } .brand span { color:var(--accent); }
+  .tab { background:transparent; border:0; padding:8px 14px; border-radius:6px 6px 0 0; color:var(--muted); display:flex; gap:8px; align-items:center; }
+  .tab.on { background:var(--bg); color:var(--text); }
+  .tab .x { opacity:.6; } .tab .x:hover { opacity:1; }
+
+  /* address bar */
+  .addr { display:flex; align-items:center; gap:8px; padding:8px 12px; background:var(--bg); border-bottom:1px solid var(--line); position:relative; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--ok); flex:none; }
+  .addr input { flex:1; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:9px 12px; color:var(--text); font-size:15px; }
+  .iconbtn { background:var(--panel); border:1px solid var(--line); border-radius:8px; width:36px; height:36px; }
+  .iconbtn.go { background:var(--accent); border-color:var(--accent); }
+  .menu { position:absolute; right:12px; top:52px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:6px; width:210px; display:none; z-index:5; box-shadow:0 8px 24px #0008; }
+  .menu.open { display:block; }
+  .menu button { display:block; width:100%; text-align:left; background:none; border:0; padding:8px 10px; border-radius:6px; }
+  .menu button:hover { background:var(--line); }
+  .menu hr { border:0; border-top:1px solid var(--line); margin:6px 0; }
+
+  main { flex:1; overflow:auto; }
+  .view { display:none; } .view.on { display:block; }
+
+  /* home */
+  .idrow { text-align:center; padding:28px 0 10px; }
+  .idrow .lbl { color:var(--muted); margin-right:10px; }
+  .idrow .id { color:var(--accent); font-size:40px; font-weight:700; letter-spacing:2px; vertical-align:middle; }
+  .invite { margin-left:12px; background:transparent; border:1px solid var(--accent); color:var(--accent); border-radius:6px; padding:5px 12px; }
+  .sub { text-align:center; color:var(--muted); font-size:13px; }
+  .sections { display:flex; gap:22px; padding:22px 28px 0; border-bottom:1px solid var(--line); }
+  .sections button { background:none; border:0; padding:6px 0 10px; color:var(--muted); font-size:15px; border-bottom:2px solid transparent; }
+  .sections button.on { color:var(--text); border-bottom-color:var(--accent); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); gap:14px; padding:20px 28px; }
+  .card { background:var(--panel); border-radius:8px; overflow:hidden; border:1px solid var(--line); cursor:pointer; }
+  .card:hover { border-color:var(--accent); }
+  .thumb { height:100px; position:relative; }
+  .thumb i { position:absolute; left:8px; top:8px; width:10px; height:10px; border-radius:50%; background:var(--muted); }
+  .thumb i.on { background:var(--ok); }
+  .thumb b { position:absolute; right:8px; top:4px; font-weight:400; font-size:16px; color:#fff9; }
+  .thumb b.fav { color:#fbbf24; }
+  .meta { padding:8px 10px; }
+  .meta .n { font-weight:600; } .meta .s { color:var(--muted); font-size:12px; }
+  .empty { padding:40px; text-align:center; color:var(--muted); }
+
+  /* settings */
+  .settings { display:flex; min-height:calc(100vh - 82px); }
+  .side { width:210px; background:#181b21; padding:16px 10px; flex:none; }
+  .side h4 { margin:14px 10px 4px; font-size:11px; letter-spacing:1px; text-transform:uppercase; color:var(--muted); font-weight:600; }
+  .side button { display:block; width:100%; text-align:left; background:none; border:0; padding:8px 10px; border-radius:6px; color:var(--text); }
+  .side button.on { background:var(--panel); box-shadow:inset 3px 0 var(--accent); }
+  .pane { flex:1; padding:22px 30px; max-width:640px; }
+  .pane h2 { margin:0 0 12px; font-size:18px; }
+  .pane h3 { margin:22px 0 8px; font-size:14px; border-bottom:1px solid var(--line); padding-bottom:6px; }
+  label.row { display:flex; gap:10px; align-items:center; padding:5px 0; }
+  .pane select, .pane input[type=text] { background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:6px; padding:8px 10px; width:100%; }
+  .profiles { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip { background:var(--panel); border:1px solid var(--line); border-radius:99px; padding:5px 14px; }
+  .chip.on { border-color:var(--accent); color:var(--accent); }
+  .btn { background:var(--accent); border:0; color:#fff; padding:8px 16px; border-radius:6px; }
+  .btn.sec { background:var(--panel); border:1px solid var(--line); }
+  .toast { position:fixed; bottom:18px; left:50%; transform:translateX(-50%); background:#000c; border:1px solid var(--line); padding:10px 16px; border-radius:8px; display:none; }
+  .toast.on { display:block; }
+  .tag { position:fixed; top:6px; right:10px; font-size:11px; color:var(--muted); }
+</style>
+</head>
+<body>
+<div class="tabs">
+  <span class="brand">Jiri<span>Desk</span></span>
+  <button class="tab on" data-view="home" id="tabHome">New Session</button>
+  <button class="tab" data-view="settings" id="tabSettings" style="display:none">Settings <span class="x" id="closeSettings">✕</span></button>
+</div>
+<div class="addr">
+  <span class="dot" title="Ready to connect"></span>
+  <input id="remote" placeholder="Enter Remote ID" maxlength="11">
+  <button class="iconbtn go" id="go" title="Connect">→</button>
+  <button class="iconbtn" id="burger" title="Menu">☰</button>
+  <div class="menu" id="menu">
+    <button data-open="General">Settings</button>
+    <button data-open="Access">Set password</button>
+    <button data-open="book">Address Book</button>
+    <button data-open="rec">Session Recordings</button>
+    <hr>
+    <button data-open="About">Help</button>
+    <button data-open="About">About JiriDesk</button>
+    <hr>
+    <button>Exit</button>
+  </div>
+</div>
+
+<main>
+  <!-- HOME -->
+  <div class="view on" id="home">
+    <div class="idrow">
+      <span class="lbl">Your ID</span><span class="id">482 913 507</span>
+      <button class="invite" id="invite">↗ Invite</button>
+    </div>
+    <div class="sub">Share your ID and password to let someone connect.</div>
+    <div class="sections" id="sections">
+      <button data-s="recent" class="on">Recent Sessions</button>
+      <button data-s="fav">Favorites</button>
+      <button data-s="disc">Discovered</button>
+    </div>
+    <div class="cards" id="cards"></div>
+  </div>
+
+  <!-- SETTINGS -->
+  <div class="view" id="settings">
+    <div class="settings">
+      <div class="side" id="side">
+        <h4>Application</h4>
+        <button data-p="General" class="on">General</button>
+        <button data-p="Connection">Connection</button>
+        <h4>Security</h4>
+        <button data-p="Access">Access</button>
+        <button data-p="Permissions">Permissions</button>
+        <button data-p="Privacy">Privacy</button>
+        <h4>Session</h4>
+        <button data-p="Display">Display</button>
+        <h4>Help</h4>
+        <button data-p="About">About</button>
+      </div>
+      <div class="pane" id="pane"></div>
+    </div>
+  </div>
+</main>
+
+<div class="toast" id="toast"></div>
+<div class="tag">UI prototype · sample data only</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const toast = (t) => { const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 2200); };
+
+// ---- sample sessions (made-up) ----
+const sessions = [
+  { n: 'Office PC', id: '318 204 775', on: true, fav: true, g: ['#0ea5e9', '#1e3a8a'] },
+  { n: 'Home laptop', id: '640 118 392', on: true, fav: false, g: ['#a855f7', '#4c1d95'] },
+  { n: 'Dad\'s desktop', id: '905 772 641', on: false, fav: false, g: ['#f59e0b', '#7c2d12'] },
+  { n: 'Server room', id: '227 530 189', on: false, fav: true, g: ['#10b981', '#064e3b'] },
+  { n: 'Shop counter', id: '774 019 466', on: true, fav: false, g: ['#ec4899', '#831843'] },
+];
+let section = 'recent';
+function renderCards() {
+  const el = $('#cards');
+  let list = sessions;
+  if (section === 'fav') list = sessions.filter((s) => s.fav);
+  if (section === 'disc') list = [];
+  if (!list.length) { el.innerHTML = `<div class="empty">${section === 'disc' ? 'No computers discovered on your network yet.' : 'Nothing here yet.'}</div>`; el.style.display = 'block'; return; }
+  el.style.display = 'grid';
+  el.innerHTML = list.map((s, i) => `
+    <div class="card" data-id="${s.id}">
+      <div class="thumb" style="background:linear-gradient(135deg,${s.g[0]},${s.g[1]})">
+        <i class="${s.on ? 'on' : ''}"></i><b class="${s.fav ? 'fav' : ''}" data-fav="${i}">${s.fav ? '★' : '☆'}</b>
+      </div>
+      <div class="meta"><div class="n">${s.n}</div><div class="s">${s.id} · ${s.on ? 'Online' : 'Offline'}</div></div>
+    </div>`).join('');
+}
+$('#sections').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  section = b.dataset.s;
+  document.querySelectorAll('#sections button').forEach((x) => x.classList.toggle('on', x === b));
+  renderCards();
+};
+$('#cards').onclick = (e) => {
+  const f = e.target.closest('[data-fav]');
+  if (f) { const s = sessions[+f.dataset.fav]; s.fav = !s.fav; renderCards(); e.stopPropagation(); return; }
+  const c = e.target.closest('.card'); if (c) toast(`Connecting to ${c.dataset.id}… (prototype)`);
+};
+
+// ---- address bar / menu ----
+$('#remote').oninput = (e) => {
+  const d = e.target.value.replace(/\D/g, '').slice(0, 9);
+  e.target.value = d.replace(/(\d{3})(?=\d)/g, '$1 ');
+};
+$('#go').onclick = () => {
+  const d = $('#remote').value.replace(/\D/g, '');
+  toast(d.length === 9 ? `Connecting to ${$('#remote').value}… (prototype)` : 'Enter a 9-digit ID.');
+};
+$('#remote').onkeydown = (e) => e.key === 'Enter' && $('#go').click();
+$('#invite').onclick = () => toast('Invite text copied: ID 482 913 507 (prototype)');
+$('#burger').onclick = (e) => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
+document.addEventListener('click', () => $('#menu').classList.remove('open'));
+$('#menu').onclick = (e) => {
+  const b = e.target.closest('[data-open]'); if (!b) return;
+  const p = b.dataset.open;
+  if (p === 'book' || p === 'rec') return toast(`${p === 'book' ? 'Address Book' : 'Session Recordings'} is not in this prototype yet.`);
+  openSettings(p);
+};
+
+// ---- tabs ----
+function show(view) {
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === view));
+  $('#tabHome').classList.toggle('on', view === 'home');
+  $('#tabSettings').classList.toggle('on', view === 'settings');
+}
+$('#tabHome').onclick = () => show('home');
+$('#tabSettings').onclick = () => show('settings');
+$('#closeSettings').onclick = (e) => { e.stopPropagation(); $('#tabSettings').style.display = 'none'; show('home'); };
+function openSettings(p) { $('#tabSettings').style.display = 'flex'; show('settings'); page(p); }
+
+// ---- settings pages ----
+const profiles = {
+  'View only': { sound: true, control: false, clip: false, restart: false, cad: false },
+  'Full control': { sound: true, control: true, clip: true, restart: true, cad: true },
+  'Unattended access': { sound: true, control: true, clip: true, restart: true, cad: true },
+};
+let profile = 'Full control';
+const chk = (id, label, on, indent) => `<label class="row" style="margin-left:${indent ? 24 : 0}px"><input type="checkbox" ${on ? 'checked' : ''}> ${label}</label>`;
+const pages = {
+  General: () => `<h2>General</h2>
+    <h3>Language</h3><select><option>Auto-select</option><option>English</option></select>
+    <h3>Theme</h3><select><option>Use system settings</option><option>Dark</option><option>Light</option></select>
+    <h3>Miscellaneous</h3>
+    ${chk('', 'Start JiriDesk with Windows', true)}${chk('', 'Show notifications for incoming connections', true)}${chk('', 'Play a sound on incoming request', false)}${chk('', 'Minimize to tray when closed', true)}`,
+  Connection: () => `<h2>Connection</h2>
+    <h3>Server</h3><input type="text" value="ws://100.101.102.103:3001">
+    <p style="color:var(--muted)">Use your Tailscale address for a private setup.</p>
+    <div style="margin-top:10px"><button class="btn" data-toast="Saved (prototype)">Save</button></div>`,
+  Access: () => `<h2>Access</h2>
+    <h3>Unattended access</h3>
+    ${chk('', 'Allow access with a password', true)}
+    <label style="display:block;margin:8px 0 4px;color:var(--muted)">Password</label>
+    <div style="display:flex;gap:8px"><input type="text" value="a3f9c21b7d" readonly><button class="btn sec" data-toast="New password generated (prototype)">New</button></div>
+    <h3>Interactive access</h3>
+    <select><option>Ask me to accept each connection</option><option>Always allow</option><option>Always deny</option></select>`,
+  Permissions: () => `<h2>Permissions</h2>
+    <h3>Profiles</h3>
+    <div class="profiles">${Object.keys(profiles).map((p) => `<button class="chip ${p === profile ? 'on' : ''}" data-profile="${p}">${p}</button>`).join('')}</div>
+    <h3>When someone connects to me, they can</h3>
+    ${chk('', 'Hear my device\'s sound', profiles[profile].sound)}
+    ${chk('', 'Control my device', profiles[profile].control)}
+    ${chk('', 'Restart my device', profiles[profile].restart, 1)}
+    ${chk('', 'Send Ctrl+Alt+Del', profiles[profile].cad, 1)}
+    ${chk('', 'Use the clipboard', profiles[profile].clip)}`,
+  Privacy: () => `<h2>Privacy</h2>
+    <h3>Session history</h3>${chk('', 'Remember recent sessions', true)}${chk('', 'Save session thumbnails', true)}
+    <div style="margin-top:10px"><button class="btn sec" data-toast="History cleared (prototype)">Clear history</button></div>`,
+  Display: () => `<h2>Display</h2>
+    <h3>Quality</h3><select><option>Balanced</option><option>Best quality</option><option>Best speed</option></select>
+    <h3>View</h3>${chk('', 'Fit remote screen to window', true)}${chk('', 'Show remote cursor', true)}`,
+  About: () => `<h2>About JiriDesk</h2><p>Version 0.1.0</p><p style="color:var(--muted)">Remote desktop for personal use.</p>`,
+};
+function page(p) {
+  document.querySelectorAll('#side button').forEach((b) => b.classList.toggle('on', b.dataset.p === p));
+  $('#pane').innerHTML = pages[p]();
+  $('#pane').dataset.page = p;
+}
+$('#side').onclick = (e) => { const b = e.target.closest('[data-p]'); if (b) page(b.dataset.p); };
+$('#pane').onclick = (e) => {
+  const c = e.target.closest('[data-profile]'); if (c) { profile = c.dataset.profile; page('Permissions'); }
+  const t = e.target.closest('[data-toast]'); if (t) toast(t.dataset.toast);
+};
+
+renderCards(); page('General');
+</script>
+</body>
+</html>

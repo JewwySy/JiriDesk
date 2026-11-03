@@ -1,0 +1,1337 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'self' data:; connect-src ws: wss: stun: https:; media-src blob: mediastream:">
+<title>JiriDesk</title>
+<style>
+  :root {
+    --bg:#0e0f12; --surface:#15171b; --raised:#1e2127; --hover:#ffffff0d; --line:#ffffff12; --line-strong:#ffffff24;
+    --text:#ececf1; --muted:#8a8f9c; --accent:#f0484a; --accent-soft:#f0484a24; --ok:#34d27b; --star:#fbbf24;
+    --shadow:0 12px 32px #00000080;
+    --ease:cubic-bezier(.22,1,.36,1); --fast:140ms; --base:240ms;
+    color-scheme:dark;
+  }
+  :root[data-theme="light"] {
+    --bg:#f6f6f8; --surface:#ffffff; --raised:#eeeef2; --hover:#0000000a; --line:#00000014; --line-strong:#00000029;
+    --text:#17181c; --muted:#6b7080; --shadow:0 12px 32px #0000002e; color-scheme:light;
+  }
+  * { box-sizing:border-box; }
+  [hidden] { display:none !important; }
+  html,body { height:100%; margin:0; }
+  body { font-family:"Segoe UI Variable Text","Segoe UI",system-ui,sans-serif; background:var(--bg); color:var(--text); font-size:13px; display:flex; flex-direction:column; overflow:hidden; user-select:none; transition:background-color var(--base), color var(--base); }
+  input { user-select:text; font:inherit; }
+  button { font:inherit; color:inherit; cursor:pointer; border:0; background:none; padding:0; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  ::-webkit-scrollbar { width:8px; height:8px; }
+  ::-webkit-scrollbar-thumb { background:var(--line-strong); border-radius:8px; }
+  ::-webkit-scrollbar-track { background:transparent; }
+  .i { width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; flex:none; pointer-events:none; transition:transform var(--base) var(--ease); }
+
+  /* icon buttons */
+  .ib { width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border-radius:8px; color:var(--muted); flex:none; transition:background-color var(--fast), color var(--fast), transform var(--fast) var(--ease), opacity var(--fast); }
+  .ib:hover { background:var(--hover); color:var(--text); }
+  .ib:active { transform:scale(.9); }
+  .ib.solid { background:var(--accent); color:#fff; }
+  .ib.solid:hover { background:var(--accent); filter:brightness(1.1); }
+  .ib.danger:hover { background:var(--accent-soft); color:var(--accent); }
+  .ib.done .i { animation:pop .34s var(--ease); }
+
+  /* title bar: draggable, native window buttons sit on the right */
+  .tabs { display:flex; align-items:center; height:40px; padding:0 150px 0 12px; gap:4px; flex:none; -webkit-app-region:drag; }
+  .tabs button { -webkit-app-region:no-drag; }
+  .brand { display:flex; align-items:center; gap:7px; font-weight:600; letter-spacing:.2px; margin-right:10px; }
+  .brand svg { width:18px; height:16px; flex:none; }
+  .tab { display:flex; align-items:center; gap:7px; height:28px; padding:0 10px; max-width:190px; border-radius:7px; color:var(--muted); white-space:nowrap; overflow:hidden; transition:max-width var(--base) var(--ease), padding var(--base) var(--ease), opacity var(--base), background-color var(--fast), color var(--fast), transform var(--fast) var(--ease); }
+  .tab:hover { color:var(--text); background:var(--hover); }
+  .tab:active { transform:scale(.96); }
+  .tab.on { background:var(--raised); color:var(--text); }
+  .tab.gone { max-width:0; padding-inline:0; opacity:0; pointer-events:none; }
+  .tab .x { display:inline-flex; border-radius:4px; opacity:.55; transition:opacity var(--fast), background-color var(--fast); }
+  .tab .x:hover { opacity:1; background:var(--hover); }
+  .tab .x .i { width:13px; height:13px; }
+
+  /* address bar */
+  .addr { display:flex; align-items:center; gap:6px; padding:0 10px 10px 12px; position:relative; flex:none; border-bottom:1px solid var(--line); }
+  .field { flex:1; display:flex; align-items:center; gap:9px; height:36px; padding:0 4px 0 12px; background:var(--surface); border:1px solid var(--line); border-radius:10px; transition:border-color var(--base), box-shadow var(--base), background-color var(--base); }
+  .field:focus-within { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .field input { flex:1; min-width:0; background:none; border:0; outline:0; color:var(--text); font-size:14px; letter-spacing:.4px; font-variant-numeric:tabular-nums; }
+  .field input::placeholder { color:var(--muted); letter-spacing:0; }
+  .dot { position:relative; width:8px; height:8px; border-radius:50%; background:var(--accent); flex:none; transition:background-color var(--base); }
+  .dot.on { background:var(--ok); }
+  .dot.on::after { content:""; position:absolute; inset:0; border-radius:50%; background:var(--ok); animation:ping 2.6s var(--ease) infinite; }
+  #go { width:28px; height:28px; border-radius:7px; opacity:.35; transition:opacity var(--base), transform var(--fast) var(--ease), filter var(--fast); }
+  #go.ready { opacity:1; }
+  #go.ready:hover .i { transform:translateX(2px); }
+
+  /* floating layers */
+  .menu { position:absolute; right:10px; top:40px; width:204px; padding:5px; background:var(--raised); border:1px solid var(--line-strong); border-radius:11px; box-shadow:var(--shadow); z-index:5; transform-origin:top right; opacity:0; visibility:hidden; transform:scale(.95) translateY(-4px); transition:opacity var(--fast), transform var(--base) var(--ease), visibility 0s linear var(--fast); }
+  .menu.open { opacity:1; visibility:visible; transform:none; transition:opacity var(--fast), transform var(--base) var(--ease); }
+  .menu button { display:flex; align-items:center; gap:9px; width:100%; height:32px; padding:0 9px; border-radius:7px; text-align:left; transition:background-color var(--fast), color var(--fast); }
+  .menu button:hover:not(:disabled) { background:var(--hover); }
+  .menu button:disabled { color:var(--muted); cursor:default; opacity:.65; }
+  .menu hr { border:0; border-top:1px solid var(--line); margin:5px 0; }
+  .soon { margin-left:auto; font-size:10px; letter-spacing:.3px; color:var(--muted); padding:1px 6px; border:1px solid var(--line-strong); border-radius:99px; }
+  #tip { position:fixed; top:0; left:0; padding:4px 8px; background:var(--raised); border:1px solid var(--line-strong); border-radius:6px; font-size:12px; white-space:nowrap; box-shadow:var(--shadow); pointer-events:none; opacity:0; z-index:30; transition:opacity var(--fast); }
+  #tip.on { opacity:1; }
+
+  /* slim notices that slide open */
+  .slide { display:grid; grid-template-rows:0fr; flex:none; transition:grid-template-rows var(--base) var(--ease); }
+  .slide.on { grid-template-rows:1fr; }
+  .slide > div { overflow:hidden; min-height:0; }
+  .notice { display:flex; align-items:center; gap:9px; padding:5px 8px 5px 14px; background:var(--accent-soft); border-bottom:1px solid var(--line); }
+  .notice span { flex:1; }
+  .rec { width:7px; height:7px; flex:none !important; border-radius:50%; background:var(--accent); animation:breathe 1.8s ease-in-out infinite; }
+  #updateBanner { animation:viewIn var(--base) var(--ease); }
+  #updateButton { display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 10px; border-radius:7px; background:var(--accent); color:#fff; transition:filter var(--fast), transform var(--fast) var(--ease); }
+  #updateButton:hover { filter:brightness(1.1); }
+  #updateButton:active { transform:scale(.96); }
+  #updateButton:disabled { opacity:.6; cursor:default; }
+
+  main { flex:1; overflow:auto; min-height:0; }
+  .view { display:none; }
+  .view.on { display:block; animation:viewIn var(--base) var(--ease); }
+  #session.on { display:flex; flex-direction:column; height:100%; position:relative; animation:fade var(--base); }
+
+  /* home */
+  .hero { text-align:center; padding:30px 0 22px; }
+  .hero .lbl { font-size:11px; letter-spacing:1.4px; text-transform:uppercase; color:var(--muted); }
+  .idline { display:flex; align-items:center; justify-content:center; gap:4px; margin-top:6px; }
+  .idline .id { color:var(--accent); font-size:38px; font-weight:300; letter-spacing:2.5px; font-variant-numeric:tabular-nums; margin-right:8px; user-select:text; }
+  .bar { display:flex; align-items:center; padding:0 18px; }
+  .sections { display:flex; gap:2px; padding:3px; background:var(--surface); border:1px solid var(--line); border-radius:10px; }
+  .sections button { display:flex; align-items:center; height:28px; padding:0 8px; border-radius:7px; color:var(--muted); transition:background-color var(--fast), color var(--fast), transform var(--fast) var(--ease); }
+  .sections button:hover { color:var(--text); }
+  .sections button:active { transform:scale(.95); }
+  .sections button.on { background:var(--raised); color:var(--text); }
+  .sections .lab { display:grid; grid-template-columns:0fr; transition:grid-template-columns var(--base) var(--ease), margin var(--base) var(--ease); }
+  .sections .lab > span { overflow:hidden; white-space:nowrap; }
+  .sections button.on .lab { grid-template-columns:1fr; margin-left:6px; }
+  .cards { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,1fr)); gap:12px; padding:14px 18px 18px; }
+  .card { position:relative; aspect-ratio:16/10; border-radius:11px; overflow:hidden; cursor:pointer; background:var(--surface); box-shadow:0 0 0 1px var(--line); transition:transform var(--base) var(--ease), box-shadow var(--base); }
+  .cards.anim .card { animation:rise .36s var(--ease) both; animation-delay:calc(var(--n) * 28ms); }
+  .card:hover { transform:translateY(-2px); box-shadow:0 0 0 1px var(--line-strong), var(--shadow); }
+  .card:active { transform:scale(.98); }
+  .thumb { position:absolute; inset:0; background-size:cover; background-position:center; transition:transform .5s var(--ease); }
+  .card:hover .thumb { transform:scale(1.05); }
+  .shade { position:absolute; inset:0; background:linear-gradient(to top,#000000b8,#00000000 58%); }
+  .meta { position:absolute; left:10px; right:10px; bottom:8px; display:flex; align-items:center; gap:8px; color:#fff; }
+  .meta .txt { min-width:0; flex:1; }
+  .meta .n { font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .meta .s { font-size:11px; color:#ffffffb3; font-variant-numeric:tabular-nums; }
+  .pres { width:7px; height:7px; border-radius:50%; background:#ffffff66; flex:none; transition:background-color var(--base), box-shadow var(--base); }
+  .pres.on { background:var(--ok); box-shadow:0 0 0 3px #34d27b33; }
+  .enter { color:#fff; opacity:0; transform:translateX(-5px); transition:opacity var(--base), transform var(--base) var(--ease); }
+  .card:hover .enter { opacity:1; transform:none; }
+  .acts { position:absolute; top:6px; right:6px; display:flex; gap:2px; }
+  .mini { width:26px; height:26px; display:inline-flex; align-items:center; justify-content:center; border-radius:7px; color:#fff; background:#00000059; backdrop-filter:blur(8px); opacity:0; transform:translateY(-3px); transition:opacity var(--fast), transform var(--base) var(--ease), background-color var(--fast); }
+  .mini .i { width:14px; height:14px; }
+  .card:hover .mini, .mini.fav, .mini:focus-visible { opacity:1; transform:none; }
+  .mini:hover { background:#000000a6; }
+  .mini.fav { color:var(--star); }
+  .mini.fav .i { fill:currentColor; }
+  .mini.popped .i { animation:pop .4s var(--ease); }
+  .empty { grid-column:1/-1; padding:44px 20px; text-align:center; color:var(--muted); animation:fade var(--base); }
+  .empty .i { display:block; width:22px; height:22px; margin:0 auto 10px; opacity:.6; }
+
+  /* session */
+  .stage { flex:1; min-height:0; background:#000; position:relative; overflow:auto; }
+  .stage video { display:block; outline:none; cursor:default; opacity:0; transition:opacity .45s; }
+  .stage video.live { opacity:1; }
+  .stage.fit video { width:100%; height:100%; object-fit:contain; }
+  .waiting { position:absolute; inset:0; display:flex; flex-direction:column; gap:14px; align-items:center; justify-content:center; color:#c9ccd4; transition:opacity .3s, visibility 0s; }
+  .waiting.off { opacity:0; visibility:hidden; transition:opacity .3s, visibility 0s linear .3s; }
+  .spin { width:24px; height:24px; border-radius:50%; border:2px solid #ffffff26; border-top-color:var(--accent); animation:spin .8s linear infinite; }
+  .pill { position:absolute; top:10px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:2px; height:38px; padding:0 4px 0 13px; background:#16181ccc; color:#ececf1; border:1px solid #ffffff1f; border-radius:12px; backdrop-filter:blur(14px); box-shadow:0 8px 24px #00000066; z-index:2; opacity:.5; transition:opacity var(--base); }
+  .pill:hover, .pill:focus-within { opacity:1; }
+  .pill #viewInfo { margin-right:8px; white-space:nowrap; font-variant-numeric:tabular-nums; }
+  .pill .ib { color:#c9ccd4; }
+  .pill .ib:hover { background:#ffffff14; color:#fff; }
+  .pill select { width:auto; height:28px; margin-right:4px; padding:0 6px; background:#ffffff14; color:#ececf1; border:0; border-radius:7px; font:inherit; }
+  .pill select option { color:#111; }
+  .pill select[hidden] { display:none; }
+  #session:fullscreen { display:flex; flex-direction:column; height:100vh; background:#000; }
+  #session:fullscreen .pill { position:fixed; transform:translate(-50%, -38px); opacity:.35; transition:transform var(--base), opacity var(--base); }
+  #session:fullscreen .pill:hover, #session:fullscreen .pill:focus-within { transform:translate(-50%, 0); opacity:1; }
+
+  /* settings */
+  #settings.on { display:flex; min-height:100%; }
+  .settings { display:flex; flex:1; min-width:0; }
+  .side { position:relative; width:172px; padding:12px 8px; flex:none; border-right:1px solid var(--line); }
+  .side button { position:relative; z-index:1; display:flex; align-items:center; gap:9px; width:100%; height:34px; padding:0 10px; border-radius:8px; color:var(--muted); text-align:left; transition:color var(--fast), transform var(--fast) var(--ease); }
+  .side button:hover { color:var(--text); }
+  .side button:active { transform:scale(.97); }
+  .side button.on { color:var(--text); }
+  #marker { position:absolute; left:8px; right:8px; top:0; height:34px; border-radius:8px; background:var(--raised); transform:translateY(var(--y,12px)); transition:transform var(--base) var(--ease); }
+  #marker::before { content:""; position:absolute; left:0; top:9px; bottom:9px; width:2px; border-radius:2px; background:var(--accent); }
+  .pane { flex:1; padding:20px 24px 28px; max-width:600px; }
+  .pane.anim > * { animation:rise .32s var(--ease) both; }
+  .pane.anim > :nth-child(2) { animation-delay:25ms; } .pane.anim > :nth-child(3) { animation-delay:50ms; }
+  .pane.anim > :nth-child(4) { animation-delay:75ms; } .pane.anim > :nth-child(5) { animation-delay:100ms; }
+  .pane.anim > :nth-child(n+6) { animation-delay:125ms; }
+  .pane h2 { margin:0 0 14px; font-size:17px; font-weight:600; }
+  .pane h3 { margin:18px 0 6px; font-size:11px; font-weight:500; letter-spacing:.8px; text-transform:uppercase; color:var(--muted); }
+  .pane p.hint { color:var(--muted); margin:7px 2px 0; font-size:12px; line-height:1.45; }
+  .group { background:var(--surface); border:1px solid var(--line); border-radius:11px; padding:0 13px; }
+  .row { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:42px; padding:6px 0; }
+  .row + .row { border-top:1px solid var(--line); }
+  .row.off { color:var(--muted); }
+  .row .end { display:flex; align-items:center; gap:7px; }
+  input[type=checkbox] { appearance:none; position:relative; width:32px; height:18px; margin:0; border-radius:99px; background:var(--line-strong); cursor:pointer; flex:none; transition:background-color var(--base); }
+  input[type=checkbox]::after { content:""; position:absolute; top:2px; left:2px; width:14px; height:14px; border-radius:50%; background:#fff; box-shadow:0 1px 2px #0006; transition:transform var(--base) var(--ease); }
+  input[type=checkbox]:checked { background:var(--accent); }
+  input[type=checkbox]:checked::after { transform:translateX(14px); }
+  input[type=checkbox]:disabled { opacity:.45; cursor:default; }
+  select, .pane input[type=text], .pane input[type=password], .box input { width:100%; height:34px; padding:0 10px; background:var(--raised); color:var(--text); border:1px solid var(--line); border-radius:8px; outline:0; transition:border-color var(--base), box-shadow var(--base); }
+  select:focus, .pane input:focus, .box input:focus { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  select { width:auto; min-width:190px; cursor:pointer; }
+  option { background:var(--raised); }
+  .inline { display:flex; align-items:center; gap:4px; padding:9px 0; }
+  .inline input { flex:1; min-width:0; margin-right:4px; }
+  .segctl { position:relative; display:grid; grid-template-columns:repeat(3,1fr); padding:3px; background:var(--surface); border:1px solid var(--line); border-radius:10px; }
+  .segthumb { position:absolute; top:3px; bottom:3px; left:3px; width:calc((100% - 6px) / 3); border-radius:7px; background:var(--raised); box-shadow:0 0 0 1px var(--line); transform:translateX(calc(var(--idx) * 100%)); transition:transform var(--base) var(--ease); }
+  .chip { position:relative; height:30px; border-radius:7px; color:var(--muted); transition:color var(--base), transform var(--fast) var(--ease); }
+  .chip:hover { color:var(--text); }
+  .chip:active { transform:scale(.97); }
+  .chip.on { color:var(--text); }
+
+  /* modal + toast */
+  .modal { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#00000080; backdrop-filter:blur(6px); z-index:10; opacity:0; visibility:hidden; transition:opacity var(--base), visibility 0s linear var(--base); }
+  .modal.on { opacity:1; visibility:visible; transition:opacity var(--base); }
+  .box { width:340px; padding:18px; background:var(--surface); border:1px solid var(--line-strong); border-radius:14px; box-shadow:var(--shadow); transform:scale(.96) translateY(6px); transition:transform var(--base) var(--ease); }
+  .modal.on .box { transform:none; }
+  .box h3 { margin:0 0 4px; font-size:15px; font-weight:600; font-variant-numeric:tabular-nums; }
+  .box p { color:var(--muted); margin:0 0 12px; font-size:12px; line-height:1.45; }
+  .box .actions { display:flex; justify-content:flex-end; gap:4px; margin-top:12px; }
+  .toast { position:fixed; bottom:18px; left:50%; max-width:80%; padding:9px 14px; background:var(--raised); border:1px solid var(--line-strong); border-radius:10px; box-shadow:var(--shadow); z-index:20; opacity:0; visibility:hidden; transform:translate(-50%,10px) scale(.98); transition:opacity var(--base), transform var(--base) var(--ease), visibility 0s linear var(--base); }
+  .toast.on { opacity:1; visibility:visible; transform:translate(-50%,0); transition:opacity var(--base), transform var(--base) var(--ease); }
+
+  @keyframes viewIn { from { opacity:0; transform:translateY(5px); } }
+  @keyframes rise { from { opacity:0; transform:translateY(8px); } }
+  @keyframes fade { from { opacity:0; } }
+  @keyframes pop { 0% { transform:scale(.6); } 60% { transform:scale(1.2); } 100% { transform:scale(1); } }
+  @keyframes ping { 0% { transform:scale(1); opacity:.6; } 70%,100% { transform:scale(2.6); opacity:0; } }
+  @keyframes breathe { 50% { opacity:.35; } }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration:.01ms !important; animation-iteration-count:1 !important; animation-delay:0s !important; transition-duration:.01ms !important; }
+  }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"/></symbol>
+  <symbol id="i-key" viewBox="0 0 24 24"><circle cx="7.5" cy="15.5" r="5.5"/><path d="M21 2l-9.6 9.6M15.5 7.5l3 3L22 7l-3-3"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></symbol>
+  <symbol id="i-video" viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="M22 8l-6 4 6 4z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></symbol>
+  <symbol id="i-power" viewBox="0 0 24 24"><path d="M18.36 6.64a9 9 0 1 1-12.73 0M12 2v10"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></symbol>
+  <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M5 12.55a11 11 0 0 1 14 0M1.5 9a16 16 0 0 1 21 0M8.5 16.1a6 6 0 0 1 7 0M12 20h.01"/></symbol>
+  <symbol id="i-pencil" viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5"/></symbol>
+  <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></symbol>
+  <symbol id="i-eyeoff" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><path d="M3 3l18 18"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+  <symbol id="i-shrink" viewBox="0 0 24 24"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></symbol>
+  <symbol id="i-exit" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></symbol>
+  <symbol id="i-mouse" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4"/></symbol>
+  <symbol id="i-mouse-off" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 6v4M3 3l18 18"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4zM22 9l-6 6M16 9l6 6"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></symbol>
+  <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+</defs></svg>
+
+<div class="tabs">
+  <span class="brand"><svg viewBox="60 80 392 340" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="40" stroke-linecap="round" d="M198 150v-8a34 34 0 0 1 34-34h150a34 34 0 0 1 34 34v112a34 34 0 0 1-34 34h-4"/><rect x="76" y="186" width="282" height="218" rx="44" fill="#f0484a"/><path fill="#fff" stroke="#fff" stroke-width="16" stroke-linejoin="round" d="M162 244l118 50-48 16-18 50z"/></svg>JiriDesk</span>
+  <button class="tab on" id="tabHome" data-tip="Home" aria-label="Home"><svg class="i"><use href="#i-home"/></svg></button>
+  <button class="tab gone" id="tabSession"><svg class="i"><use href="#i-monitor"/></svg><span id="tabSessionText">Session</span></button>
+  <button class="tab gone" id="tabSettings" aria-label="Settings"><svg class="i"><use href="#i-sliders"/></svg>Settings<span class="x" id="closeSettings" role="button" aria-label="Close settings"><svg class="i"><use href="#i-x"/></svg></span></button>
+</div>
+<div class="addr">
+  <div class="field">
+    <span class="dot" id="dot" data-tip="Offline"></span>
+    <input id="remote" placeholder="Enter Remote ID" maxlength="11" aria-label="Remote ID">
+    <button class="ib solid" id="go" data-tip="Connect" aria-label="Connect"><svg class="i"><use href="#i-arrow"/></svg></button>
+  </div>
+  <button class="ib" id="burger" data-tip="Menu" aria-label="Menu"><svg class="i"><use href="#i-menu"/></svg></button>
+  <div class="menu" id="menu">
+    <button data-open="General"><svg class="i"><use href="#i-sliders"/></svg>Settings</button>
+    <button data-open="Access"><svg class="i"><use href="#i-key"/></svg>Set password</button>
+    <button disabled><svg class="i"><use href="#i-book"/></svg>Address Book<span class="soon">soon</span></button>
+    <button disabled><svg class="i"><use href="#i-video"/></svg>Recordings<span class="soon">soon</span></button>
+    <hr>
+    <button data-open="About"><svg class="i"><use href="#i-info"/></svg>About JiriDesk</button>
+    <button id="exit"><svg class="i"><use href="#i-power"/></svg>Exit</button>
+  </div>
+</div>
+<div id="updateBanner" class="notice" hidden><svg class="i"><use href="#i-download"/></svg><span id="updateText" role="status"></span><button type="button" id="updateButton">Update &amp; restart</button></div>
+<div class="slide" id="hostbar"><div><div class="notice"><i class="rec"></i><span id="hostText"></span><button class="ib danger" id="hostEnd" data-tip="Disconnect" aria-label="Disconnect"><svg class="i"><use href="#i-exit"/></svg></button></div></div></div>
+
+<main>
+  <div class="view on" id="home">
+    <div class="hero">
+      <div class="lbl">Your ID</div>
+      <div class="idline">
+        <span class="id" id="myId">--- --- ---</span>
+        <button class="ib" id="copyId" data-tip="Copy ID" aria-label="Copy ID"><svg class="i"><use href="#i-copy"/></svg></button>
+        <button class="ib" id="invite" data-tip="Copy invite" aria-label="Copy invite"><svg class="i"><use href="#i-share"/></svg></button>
+      </div>
+    </div>
+    <div class="bar">
+      <div class="sections" id="sections">
+        <button data-s="recent" class="on" data-tip="Recent Sessions" aria-label="Recent Sessions"><svg class="i"><use href="#i-clock"/></svg><span class="lab"><span>Recent</span></span></button>
+        <button data-s="fav" data-tip="Favorites" aria-label="Favorites"><svg class="i"><use href="#i-star"/></svg><span class="lab"><span>Favorites</span></span></button>
+        <button data-s="disc" data-tip="Discovered" aria-label="Discovered"><svg class="i"><use href="#i-wifi"/></svg><span class="lab"><span>Discovered</span></span></button>
+      </div>
+    </div>
+    <div class="cards" id="cards"></div>
+  </div>
+
+  <div class="view" id="session">
+    <div class="pill">
+      <span id="viewInfo"></span>
+      <select id="monitorPick" aria-label="Monitor" hidden></select>
+      <button class="ib" id="mouseBtn" hidden><svg class="i"><use id="mouseIcon" href="#i-mouse"/></svg></button>
+      <button class="ib" id="muteBtn" aria-label="Mute" data-tip="Mute"><svg class="i"><use id="muteIcon" href="#i-volume"/></svg></button>
+      <button class="ib" id="fitBtn" aria-label="Actual size" data-tip="Actual size"><svg class="i"><use id="fitIcon" href="#i-shrink"/></svg></button>
+      <button class="ib" id="fullBtn" aria-label="Full screen" data-tip="Full screen"><svg class="i"><use href="#i-monitor"/></svg></button>
+      <button class="ib danger" id="disconnectBtn" data-tip="Disconnect" aria-label="Disconnect"><svg class="i"><use href="#i-exit"/></svg></button>
+    </div>
+    <div class="stage" id="stage">
+      <video id="video" autoplay playsinline muted tabindex="0"></video>
+      <div class="waiting" id="waiting"><div class="spin"></div><span id="waitingText"></span></div>
+    </div>
+  </div>
+
+  <div class="view" id="settings">
+    <div class="settings">
+      <div class="side" id="side">
+        <div id="marker"></div>
+        <button data-p="General"><svg class="i"><use href="#i-sliders"/></svg>General</button>
+        <button data-p="Connection"><svg class="i"><use href="#i-globe"/></svg>Connection</button>
+        <button data-p="Access"><svg class="i"><use href="#i-key"/></svg>Access</button>
+        <button data-p="Permissions"><svg class="i"><use href="#i-shield"/></svg>Permissions</button>
+        <button data-p="Privacy"><svg class="i"><use href="#i-lock"/></svg>Privacy</button>
+        <button data-p="Display"><svg class="i"><use href="#i-monitor"/></svg>Display</button>
+        <button data-p="About"><svg class="i"><use href="#i-info"/></svg>About</button>
+      </div>
+      <div class="pane" id="pane"></div>
+    </div>
+  </div>
+</main>
+
+<div class="modal" id="modal"><form class="box" id="modalForm">
+  <h3 id="modalTitle"></h3>
+  <p id="modalText"></p>
+  <input id="modalInput">
+  <div class="actions">
+    <button type="button" class="ib" id="modalCancel" data-tip="Cancel" aria-label="Cancel"><svg class="i"><use href="#i-x"/></svg></button>
+    <button type="submit" class="ib solid" id="modalOk"><svg class="i"><use id="modalIcon" href="#i-check"/></svg></button>
+  </div>
+</form></div>
+<div class="toast" id="toast" role="status"></div>
+<div id="tip" role="tooltip"></div>
+
+<script src="servers.js"></script>
+<script src="session.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const ic = (n) => `<svg class="i"><use href="#i-${n}"/></svg>`;
+const fmt = (id) => String(id).replace(/(\d{3})(\d{3})(\d{3})/, '$1 $2 $3');
+const toast = (t) => { const e = $('#toast'); e.textContent = t; e.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => e.classList.remove('on'), 3000); };
+
+const stun = { urls: 'stun:stun.l.google.com:19302' };
+let rtcConfig = { iceServers: [stun] };
+let admin = { available: false, active: false };
+const QUALITY = {
+  balanced: { hint: 'detail', bitrate: 4000000 },
+  quality: { hint: 'text', bitrate: 10000000 },
+  speed: { hint: 'motion', bitrate: 1500000 },
+};
+let cfg, ws, reconnectTimer;
+let serverAttempt = 0; // next address to try; back to the first after a working connection drops
+let online = new Set();
+let discovered = []; // other JiriDesk apps open on this network: { id, name }
+const isOnline = (id) => online.has(id) || discovered.some((d) => d.id === id);
+let hostSess = null; // someone is viewing this computer: { peer, pc, stream, level, ice }
+let viewSess = null; // this computer is viewing another: { peer, pc, level, ice }
+const toWs = (o) => ws && ws.readyState === 1 && ws.send(JSON.stringify(o));
+
+async function init() {
+  cfg = await window.native.getConfig();
+  admin = await window.native.adminStatus();
+  $('#myId').textContent = fmt(cfg.id);
+  applyTheme();
+  applyFit();
+  renderCards(true);
+  page('General');
+  connectWs();
+  setInterval(queryPresence, 15000);
+}
+
+function applyTheme() {
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const theme = cfg.theme === 'system' ? (dark ? 'dark' : 'light') : cfg.theme;
+  document.documentElement.dataset.theme = theme;
+  window.native.setChrome(theme);
+}
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => cfg && applyTheme());
+
+// ---------- signaling ----------
+function connectWs() {
+  clearTimeout(reconnectTimer);
+  rtcConfig = { iceServers: [stun] };
+  const servers = JiriServers.serversToTry(cfg.server, cfg.serverAccessKey);
+  if (!servers.length) return setOnline(false, cfg.serverAccessKey ? 'A server access key requires wss://' : 'Invalid server address');
+  const address = servers[serverAttempt % servers.length];
+  try { ws = new WebSocket(address); } catch { setOnline(false, 'Invalid server address'); return; }
+  const sock = ws;
+  const giveUp = setTimeout(() => sock.close(), 2500); // an unreachable address can hang for a long time
+  ws.onopen = () => { clearTimeout(giveUp); if (sock === ws) toWs({ type: 'register', id: cfg.id, name: cfg.deviceName, accessKey: cfg.serverAccessKey }); };
+  ws.onmessage = (e) => {
+    if (sock !== ws) return;
+    const m = JSON.parse(e.data);
+    if (m.type === 'registered') { sock.registered = true; sock.address = address; }
+    onMsg(m);
+  };
+  ws.onclose = () => {
+    clearTimeout(giveUp);
+    if (sock !== ws) return;
+    setOnline(false, sock.closeReason);
+    serverAttempt = sock.registered ? 0 : serverAttempt + 1;
+    const triedAll = sock.registered || serverAttempt % servers.length === 0;
+    // An established WebRTC session keeps running without signaling; only cancel unfinished ones.
+    if (hostSess && !hostSess.pc) endHost('', false);
+    if (viewSess && !viewSess.pc) endViewer('Lost connection to the server.', false);
+    online = new Set();
+    showDiscovered([]);
+    updatePresence();
+    reconnectTimer = setTimeout(connectWs, triedAll ? 3000 : 0);
+  };
+}
+function setOnline(on, text) {
+  $('#dot').classList.toggle('on', on);
+  $('#dot').dataset.tip = text || (on ? 'Online' : 'Offline');
+}
+function queryPresence() {
+  if (cfg.recent.length) toWs({ type: 'presence', ids: cfg.recent.map((r) => r.id) });
+}
+
+async function onMsg(m) {
+  switch (m.type) {
+    case 'registered':
+      rtcConfig = { iceServers: [stun, ...(m.iceServers || [])] };
+      setOnline(true, `Online via ${ws.address}`);
+      return queryPresence();
+    case 'ice-config':
+      rtcConfig = { iceServers: [stun, ...m.iceServers] };
+      return;
+    case 'presence': online = new Set(m.online); return updatePresence();
+    case 'discovered': return showDiscovered(m.devices);
+    case 'error':
+      if (m.code === 'access-denied') setOnline(false, 'Invalid server access key');
+      if (m.code === 'id-in-use') {
+        // After a network change the server may still hold this device's old connection until its heartbeat clears it.
+        ws.closeReason = 'This ID is already in use';
+        ws.close();
+      }
+      return;
+    case 'connect-request': return onConnectRequest(m);
+    case 'accept': return onAccepted(m);
+    case 'reject':
+      if (viewSess && viewSess.peer === m.from) endViewer(m.reason || 'Connection declined.', false);
+      return;
+    case 'offer': return m.auth ? sendPassword(m) : onOffer(m);
+    case 'answer': {
+      const target = hostSess && hostSess.peer === m.from && (m.auth ? hostSess.auth : hostSess);
+      if (target && target.pc) {
+        await target.pc.setRemoteDescription(m.sdp);
+        flushIce(target);
+      }
+      return;
+    }
+    case 'ice': {
+      const found = [hostSess, viewSess].find((x) => x && x.peer === m.from);
+      const s = found && (m.auth ? found.auth : found);
+      if (!s) return;
+      if (s.pc && s.pc.remoteDescription) await s.pc.addIceCandidate(m.candidate).catch(() => {});
+      else s.ice.push(m.candidate);
+      return;
+    }
+    case 'bye':
+      if (hostSess && hostSess.peer === m.from) endHost('', false);
+      if (viewSess && viewSess.peer === m.from) endViewer('The other computer ended the session.', false);
+  }
+}
+function flushIce(s) {
+  s.ice.splice(0).forEach((c) => s.pc.addIceCandidate(c).catch(() => {}));
+}
+
+// ---------- this computer is the host ----------
+// Signaling can be plain ws:// on the same network, so a password only travels inside an encrypted data channel.
+function receivePassword(sess) {
+  return new Promise((resolve) => {
+    const pc = new RTCPeerConnection(rtcConfig);
+    sess.auth = { pc, ice: [] };
+    const timer = setTimeout(() => resolve(null), 15000);
+    const dc = pc.createDataChannel('auth');
+    dc.onmessage = (ev) => { clearTimeout(timer); resolve(String(ev.data)); };
+    pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed') { clearTimeout(timer); resolve(null); } };
+    pc.onicecandidate = (ev) => ev.candidate && toWs({ type: 'ice', auth: true, to: sess.peer, candidate: ev.candidate });
+    pc.createOffer()
+      .then((offer) => pc.setLocalDescription(offer))
+      .then(() => toWs({ type: 'offer', auth: true, to: sess.peer, sdp: pc.localDescription }))
+      .catch(() => { clearTimeout(timer); resolve(null); });
+  });
+}
+
+async function onConnectRequest(m) {
+  if (hostSess) return toWs({ type: 'reject', to: m.from, reason: 'The computer is busy with another session.' });
+  const sess = { peer: m.from, pc: null, ice: [] };
+  hostSess = sess;
+  const reject = (reason) => { if (hostSess === sess) hostSess = null; toWs({ type: 'reject', to: m.from, reason }); };
+
+  let level;
+  if (m.password) return reject('Update JiriDesk on the computer you are connecting from.');
+  if (m.auth) {
+    if (!cfg.allowPassword) return reject('Password access is turned off on that computer.');
+    const password = await receivePassword(sess);
+    sess.auth.pc.close();
+    sess.auth = null;
+    if (hostSess !== sess) return;
+    if (password === null) return reject('Could not open a secure connection to that computer.');
+    if (!(await window.native.checkPassword(password))) return reject('Wrong password.');
+    level = cfg.profile === 'view' ? 'view' : 'control';
+  } else {
+    if (cfg.interactive === 'never') return reject('That computer only accepts connections with a password.');
+    level = await window.native.askPermission(m.from, cfg.profile !== 'control');
+    if (level === 'deny') return reject('Declined by the other computer.');
+  }
+  if (hostSess !== sess) return; // the viewer gave up while we were asking
+
+  let stream;
+  try {
+    sess.monitors = await window.native.screenSources();
+    sess.monitor = 0;
+    stream = await captureScreen(sess.monitors[0].sourceId);
+    window.native.setInputDisplay(sess.monitors[0].displayId);
+  } catch { return reject('That computer could not capture its screen.'); }
+  if (hostSess !== sess) { stream.getTracks().forEach((t) => t.stop()); return; }
+
+  const q = QUALITY[m.quality] || QUALITY.balanced;
+  const [track] = stream.getVideoTracks();
+  track.contentHint = q.hint;
+
+  const pc = new RTCPeerConnection(rtcConfig);
+  sess.pc = pc; sess.stream = stream; sess.level = level;
+  const sender = pc.addTrack(track, stream);
+  sess.sender = sender;
+  sess.contentHint = q.hint;
+  // In the same stream the receiver would hold the picture back to stay in sync with the sound.
+  stream.getAudioTracks().forEach((t) => pc.addTrack(t, new MediaStream([t])));
+  const dc = pc.createDataChannel('control');
+  dc.onmessage = (ev) => {
+    if (hostSess !== sess || sess.level !== 'control') return;
+    const msg = JSON.parse(ev.data);
+    if (msg.type === 'clipboard') sess.applyClipboard?.(msg.text);
+    else if (msg.type === 'monitor') switchMonitor(sess, msg.index, dc).catch(() => tellMonitors(sess, dc));
+    else window.native.input(msg);
+  };
+  if (level === 'control') {
+    dc.onopen = () => {
+      startClipboardSync(sess, dc);
+      tellMonitors(sess, dc);
+    };
+    receiveFiles(pc.createDataChannel('files'), sess);
+  }
+  let boosted;
+  watchPath(sess, pc, ({ lan }) => {
+    if (boosted === lan) return;
+    boosted = lan;
+    const params = sender.getParameters();
+    if (!params.encodings || !params.encodings[0]) return;
+    params.encodings[0].maxBitrate = JiriSession.qualityFor(lan, q.bitrate);
+    params.encodings[0].maxFramerate = 60;
+    sender.setParameters(params).catch(() => {});
+  });
+  pc.onicecandidate = (ev) => ev.candidate && toWs({ type: 'ice', to: m.from, candidate: ev.candidate });
+  pc.onconnectionstatechange = () => { if (pc.connectionState === 'failed' && hostSess === sess) endHost('', false); };
+
+  $('#hostText').textContent = `${fmt(m.from)} is connected to this computer (${level === 'control' ? 'full control' : 'view only'})`;
+  $('#hostbar').classList.add('on');
+  window.native.notify(`${fmt(m.from)} connected to this computer.`);
+
+  toWs({ type: 'accept', to: m.from, level });
+  await pc.setLocalDescription(await pc.createOffer());
+  toWs({ type: 'offer', to: m.from, sdp: pc.localDescription });
+
+  const params = sender.getParameters();
+  if (params.encodings && params.encodings[0]) {
+    params.encodings[0].maxBitrate = q.bitrate;
+    sender.setParameters(params).catch(() => {});
+  }
+}
+
+const screenVideo = (sourceId) => ({ mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId, maxFrameRate: 60 } });
+function tellMonitors(sess, dc) {
+  if (dc.readyState !== 'open') return;
+  dc.send(JSON.stringify({ type: 'monitors', current: sess.monitor, list: sess.monitors.map((m) => ({ label: m.label, width: m.width, height: m.height })) }));
+}
+// Swaps the picture on the live connection, so the session and the sound carry on.
+async function switchMonitor(sess, index, dc) {
+  const monitor = sess.monitors[index];
+  if (!monitor || index === sess.monitor) return tellMonitors(sess, dc);
+  const next = await navigator.mediaDevices.getUserMedia({ audio: false, video: screenVideo(monitor.sourceId) });
+  const [track] = next.getVideoTracks();
+  if (hostSess !== sess) return track.stop();
+  track.contentHint = sess.contentHint;
+  const [old] = sess.stream.getVideoTracks();
+  await sess.sender.replaceTrack(track);
+  sess.stream.removeTrack(old);
+  old.stop();
+  sess.stream.addTrack(track);
+  sess.monitor = index;
+  window.native.setInputDisplay(monitor.displayId);
+  tellMonitors(sess, dc);
+}
+async function captureScreen(sourceId) {
+  const video = screenVideo(sourceId);
+  try {
+    return await navigator.mediaDevices.getUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } }, video });
+  } catch {
+    return navigator.mediaDevices.getUserMedia({ audio: false, video }); // system sound is not available on every computer
+  }
+}
+
+// Both sides watch their own clipboard. Remembering what arrived stops it from echoing back.
+const MAX_CLIPBOARD_CHARS = 60000; // stays under the data channel's message limit
+function startClipboardSync(sess, dc) {
+  if (!cfg.syncClipboard) return;
+  let last;
+  const timer = setInterval(async () => {
+    const text = await window.native.readClipboard();
+    if (text === last) return;
+    const first = last === undefined;
+    last = text;
+    if (!first && text && text.length <= MAX_CLIPBOARD_CHARS && dc.readyState === 'open') dc.send(JSON.stringify({ type: 'clipboard', text }));
+  }, 800);
+  sess.applyClipboard = (text) => {
+    if (typeof text !== 'string') return;
+    last = text;
+    window.native.copy(text);
+  };
+  sess.stopClipboard = () => clearInterval(timer);
+}
+
+// Reports the path WebRTC chose: it tries direct routes first, so the same network wins on its own.
+function watchPath(sess, pc, report) {
+  const check = async () => {
+    const stats = await pc.getStats();
+    let pair;
+    stats.forEach((s) => { if (s.type === 'transport' && s.selectedCandidatePairId) pair = stats.get(s.selectedCandidatePairId); });
+    if (!pair) return;
+    report({
+      lan: JiriSession.isLanPath(stats.get(pair.localCandidateId), stats.get(pair.remoteCandidateId)),
+      ms: pair.currentRoundTripTime === undefined ? null : Math.round(pair.currentRoundTripTime * 1000),
+    });
+  };
+  sess.pathTimer = setInterval(() => check().catch(() => {}), 3000);
+}
+function stopSessionHelpers(sess) {
+  clearInterval(sess.pathTimer);
+  sess.stopClipboard?.();
+}
+
+function receiveFiles(dc, sess) {
+  dc.binaryType = 'arraybuffer';
+  let chain = Promise.resolve();
+  let id = null;
+  const tell = (o) => dc.readyState === 'open' && dc.send(JSON.stringify(o));
+  dc.onmessage = (ev) => {
+    chain = chain.then(async () => {
+      if (hostSess !== sess || sess.level !== 'control') return;
+      if (typeof ev.data !== 'string') {
+        if (id !== null && !(await window.native.fileChunk(id, new Uint8Array(ev.data)))) { id = null; tell({ type: 'failed' }); }
+        return;
+      }
+      const m = JSON.parse(ev.data);
+      if (m.type === 'start') id = await window.native.fileStart(m.name, m.size);
+      if (m.type === 'end' && id !== null) {
+        const saved = await window.native.fileEnd(id);
+        id = null;
+        if (!saved) return tell({ type: 'failed' });
+        window.native.notify(`Received ${saved} in Downloads\\JiriDesk.`);
+        tell({ type: 'saved', name: saved });
+      }
+    }).catch(() => { id = null; tell({ type: 'failed' }); });
+  };
+}
+
+function endHost(_text, notify = true) {
+  if (!hostSess) return;
+  stopSessionHelpers(hostSess);
+  window.native.releaseInput();
+  window.native.fileAbortAll();
+  if (notify) toWs({ type: 'bye', to: hostSess.peer });
+  hostSess.stream && hostSess.stream.getTracks().forEach((t) => t.stop());
+  hostSess.auth && hostSess.auth.pc.close();
+  hostSess.pc && hostSess.pc.close();
+  hostSess = null;
+  $('#hostbar').classList.remove('on');
+}
+$('#hostEnd').onclick = () => endHost();
+
+// ---------- this computer is the viewer ----------
+function startConnect(id) {
+  id = String(id).replace(/\D/g, '');
+  if (id.length !== 9) return toast('Enter a 9-digit ID.');
+  if (id === cfg.id) return toast('You cannot connect to yourself.');
+  if (viewSess) return toast('Disconnect from the current session first.');
+  if (!ws || ws.readyState !== 1) return toast('Not connected to the server. Check Settings > Connection.');
+  ask({
+    title: `Connect to ${fmt(id)}`,
+    text: 'Enter the password for unattended access, or leave it blank to ask the other computer to accept.',
+    ok: 'Connect',
+    icon: 'arrow',
+    type: 'password',
+    placeholder: 'Password (optional)',
+  }, (password) => beginSession(id, password));
+}
+
+function beginSession(id, password) {
+  viewSess = { peer: id, pc: null, ice: [], password };
+  $('#viewInfo').textContent = `Connecting to ${fmt(id)}`;
+  $('#waitingText').textContent = password ? 'Connecting…' : 'Waiting for the other computer to accept…';
+  $('#waiting').classList.remove('off');
+  $('#tabSessionText').textContent = fmt(id);
+  $('#tabSession').classList.remove('gone');
+  show('session');
+  toWs({ type: 'connect-request', to: id, auth: Boolean(password), quality: cfg.quality });
+}
+
+async function sendPassword(m) {
+  if (!viewSess || viewSess.peer !== m.from || !viewSess.password) return;
+  const sess = viewSess;
+  const pc = new RTCPeerConnection(rtcConfig);
+  sess.auth = { pc, ice: [] };
+  pc.ondatachannel = (ev) => {
+    const dc = ev.channel;
+    const send = () => { dc.send(sess.password); sess.password = ''; };
+    if (dc.readyState === 'open') send();
+    else dc.onopen = send;
+  };
+  pc.onicecandidate = (ev) => ev.candidate && toWs({ type: 'ice', auth: true, to: m.from, candidate: ev.candidate });
+  await pc.setRemoteDescription(m.sdp);
+  flushIce(sess.auth);
+  await pc.setLocalDescription(await pc.createAnswer());
+  toWs({ type: 'answer', auth: true, to: m.from, sdp: pc.localDescription });
+}
+
+function onAccepted(m) {
+  if (!viewSess || viewSess.peer !== m.from) return;
+  viewSess.level = m.level;
+  if (viewSess.auth) { viewSess.auth.pc.close(); viewSess.auth = null; }
+  $('#waitingText').textContent = 'Accepted. Waiting for video…';
+}
+
+async function onOffer(m) {
+  if (!viewSess || viewSess.peer !== m.from) return;
+  const sess = viewSess;
+  const pc = new RTCPeerConnection(rtcConfig);
+  sess.pc = pc;
+  const video = $('#video');
+  const levelText = sess.level === 'control' ? 'Full control' : 'View only';
+  pc.ontrack = (ev) => {
+    ev.receiver.jitterBufferTarget = 0; // show each frame as soon as it arrives
+    if (!video.srcObject) video.srcObject = new MediaStream();
+    video.srcObject.addTrack(ev.track);
+    video.muted = videoMuted;
+  };
+  watchPath(sess, pc, ({ lan, ms }) => {
+    $('#viewInfo').textContent = `${fmt(sess.peer)} · ${levelText} · ${lan ? 'Same network' : 'Remote network'}${ms === null ? '' : ` · ${ms} ms`}`;
+  });
+  video.onplaying = () => {
+    if (viewSess !== sess) return;
+    $('#waiting').classList.add('off');
+    video.classList.add('live');
+    $('#viewInfo').textContent = `${fmt(sess.peer)} · ${levelText}`;
+    video.focus();
+    remember(sess.peer);
+    setTimeout(() => saveThumb(sess), 3000);
+  };
+  pc.ondatachannel = (ev) => {
+    if (sess.level !== 'control') return;
+    if (ev.channel.label === 'files') return attachFiles(ev.channel, sess);
+    attachControls(ev.channel, sess);
+  };
+  pc.onicecandidate = (ev) => ev.candidate && toWs({ type: 'ice', to: m.from, candidate: ev.candidate });
+  pc.onconnectionstatechange = () => {
+    if (pc.connectionState === 'failed' && viewSess === sess) endViewer('The connection failed. The two networks could not reach each other.', true);
+  };
+  await pc.setRemoteDescription(m.sdp);
+  flushIce(sess);
+  await pc.setLocalDescription(await pc.createAnswer());
+  toWs({ type: 'answer', to: m.from, sdp: pc.localDescription });
+}
+
+function endViewer(text, notify = true) {
+  if (!viewSess) return;
+  saveThumb(viewSess);
+  stopSessionHelpers(viewSess);
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  if (notify) toWs({ type: 'bye', to: viewSess.peer });
+  viewSess.auth && viewSess.auth.pc.close();
+  viewSess.pc && viewSess.pc.close();
+  viewSess = null;
+  detachControls();
+  $('#video').srcObject = null;
+  $('#video').classList.remove('live');
+  $('#tabSession').classList.add('gone');
+  show('home');
+  if (text) toast(text);
+}
+$('#disconnectBtn').onclick = () => endViewer('Disconnected.');
+
+// ---------- full screen and sound ----------
+let videoMuted = false;
+$('#muteBtn').onclick = () => {
+  videoMuted = !videoMuted;
+  $('#video').muted = videoMuted;
+  const label = videoMuted ? 'Unmute' : 'Mute';
+  $('#muteBtn').dataset.tip = label;
+  $('#muteBtn').setAttribute('aria-label', label);
+  $('#muteIcon').setAttribute('href', videoMuted ? '#i-mute' : '#i-volume');
+};
+$('#fullBtn').onclick = async () => {
+  if (document.fullscreenElement) return document.exitFullscreen();
+  await $('#session').requestFullscreen({ navigationUI: 'hide' });
+  // Sends Win, Alt+Tab and Esc to the remote computer instead of this one. Hold Esc to leave full screen.
+  await navigator.keyboard?.lock?.().catch(() => {});
+  $('#video').focus();
+};
+document.addEventListener('fullscreenchange', () => {
+  if (!document.fullscreenElement) navigator.keyboard?.unlock?.();
+  $('#video').focus();
+});
+
+// ---------- files dropped on the session ----------
+// Without this, dropping a file anywhere makes the window navigate to it.
+document.addEventListener('dragover', (e) => e.preventDefault());
+document.addEventListener('drop', (e) => e.preventDefault());
+const FILE_CHUNK = 64 * 1024;
+function attachFiles(dc, sess) {
+  dc.bufferedAmountLowThreshold = 1024 * 1024;
+  dc.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'saved') toast(`Saved ${m.name} in Downloads\\JiriDesk on the other computer.`);
+    if (m.type === 'failed') toast('The other computer could not save the file.');
+  };
+  let queue = Promise.resolve();
+  $('#stage').ondrop = (e) => {
+    e.preventDefault();
+    for (const file of e.dataTransfer.files) {
+      queue = queue.then(() => sendFile(dc, sess, file)).catch(() => toast(`Could not send ${file.name}.`));
+    }
+  };
+}
+async function sendFile(dc, sess, file) {
+  dc.send(JSON.stringify({ type: 'start', name: file.name, size: file.size }));
+  let shown = 0;
+  for (const [from, to] of JiriSession.chunkRanges(file.size, FILE_CHUNK)) {
+    if (viewSess !== sess || dc.readyState !== 'open') return;
+    if (dc.bufferedAmount > 4 * 1024 * 1024) await new Promise((r) => { dc.onbufferedamountlow = r; });
+    dc.send(await file.slice(from, to).arrayBuffer());
+    if (performance.now() - shown > 1000) {
+      shown = performance.now();
+      toast(`Sending ${file.name}: ${Math.floor(to / file.size * 100)}%`);
+    }
+  }
+  dc.send(JSON.stringify({ type: 'end' }));
+}
+
+function attachControls(dc, sess) {
+  const v = $('#video');
+  v.style.cursor = 'default';
+  const send = (o) => dc.readyState === 'open' && dc.send(JSON.stringify(o));
+  dc.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'clipboard') sess.applyClipboard?.(m.text);
+    if (m.type === 'monitors') showMonitors(m);
+  };
+  dc.onopen = () => startClipboardSync(sess, dc);
+  if (dc.readyState === 'open') dc.onopen();
+  const pick = $('#monitorPick');
+  const showMonitors = ({ list, current }) => {
+    pick.innerHTML = list.map((m, n) => `<option value="${n}">${esc(m.label)}${m.width ? ` (${m.width}x${m.height})` : ''}</option>`).join('');
+    pick.value = String(current);
+    pick.hidden = list.length < 2;
+  };
+  pick.onchange = () => {
+    send({ type: 'monitor', index: Number(pick.value) });
+    v.focus();
+  };
+  const held = JiriSession.heldKeysTracker();
+  // Keys let go while another window has focus never reach this page, so release them now.
+  const releaseKeys = () => held.releaseAll().forEach((code) => send({ type: 'keyup', code }));
+  v.onblur = releaseKeys;
+  window.onblur = releaseKeys;
+  const pos = (e) => {
+    // Account for letterboxing (object-fit: contain) so coordinates map to the real screen.
+    const r = v.getBoundingClientRect();
+    const scale = Math.min(r.width / v.videoWidth, r.height / v.videoHeight);
+    const w = v.videoWidth * scale, h = v.videoHeight * scale;
+    const x = (e.clientX - r.left - (r.width - w) / 2) / w;
+    const y = (e.clientY - r.top - (r.height - h) / 2) / h;
+    return { x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) };
+  };
+  // With the remote mouse off, this computer's mouse only moves here, so it can leave the window freely.
+  let mouseOn = true, last = { x: 0, y: 0 };
+  const pressed = new Set();
+  const at = (e) => (last = pos(e));
+  const setMouse = (on, announce = true) => {
+    mouseOn = on;
+    if (!on) {
+      pressed.forEach((button) => send({ type: 'up', button, ...last }));
+      pressed.clear();
+    }
+    const label = `Remote mouse ${on ? 'on' : 'off'} (Ctrl+Alt+M)`;
+    $('#mouseBtn').dataset.tip = label;
+    $('#mouseBtn').setAttribute('aria-label', label);
+    $('#mouseBtn').setAttribute('aria-pressed', String(on));
+    $('#mouseIcon').setAttribute('href', on ? '#i-mouse' : '#i-mouse-off');
+    if (announce) toast(on ? 'Remote mouse is on.' : 'Remote mouse is off. Your mouse stays on this computer.');
+  };
+  setMouse(true, false);
+  $('#mouseBtn').hidden = false;
+  $('#mouseBtn').onclick = () => { setMouse(!mouseOn); v.focus(); };
+  let lastMove = 0, shortcutHeld = false;
+  v.onmousemove = (e) => { if (!mouseOn) return; const t = performance.now(); if (t - lastMove > 16) { lastMove = t; send({ type: 'move', ...at(e) }); } };
+  v.onpointerdown = (e) => { if (mouseOn) v.setPointerCapture(e.pointerId); }; // a drag that leaves the video still ends on the remote
+  v.onmousedown = (e) => { v.focus(); if (!mouseOn) return; pressed.add(e.button); send({ type: 'down', button: e.button, ...at(e) }); };
+  v.onmouseup = (e) => { if (!mouseOn) return; pressed.delete(e.button); send({ type: 'up', button: e.button, ...at(e) }); };
+  v.oncontextmenu = (e) => e.preventDefault();
+  v.onwheel = (e) => { e.preventDefault(); if (mouseOn) send({ type: 'wheel', dy: e.deltaY, dx: e.deltaX, ...at(e) }); };
+  v.onkeydown = (e) => {
+    e.preventDefault();
+    if (e.code === 'KeyM' && e.ctrlKey && e.altKey) {
+      if (!e.repeat) setMouse(!mouseOn);
+      shortcutHeld = true;
+      return;
+    }
+    held.down(e.code);
+    send({ type: 'keydown', code: e.code });
+  };
+  v.onkeyup = (e) => {
+    e.preventDefault();
+    if (e.code === 'KeyM' && shortcutHeld) { shortcutHeld = false; return; }
+    held.up(e.code);
+    send({ type: 'keyup', code: e.code });
+  };
+}
+function detachControls() {
+  $('#mouseBtn').hidden = true;
+  $('#mouseBtn').onclick = null;
+  const v = $('#video');
+  v.style.cursor = 'default';
+  v.onblur?.();
+  v.onmousemove = v.onpointerdown = v.onmousedown = v.onmouseup = v.oncontextmenu = v.onwheel = v.onkeydown = v.onkeyup = v.onblur = null;
+  window.onblur = null;
+  $('#stage').ondrop = null;
+  $('#monitorPick').hidden = true;
+  $('#monitorPick').onchange = null;
+}
+
+function applyFit() {
+  $('#stage').classList.toggle('fit', cfg.fit);
+  const label = cfg.fit ? 'Actual size' : 'Fit to window';
+  $('#fitBtn').dataset.tip = label;
+  $('#fitBtn').setAttribute('aria-label', label);
+  $('#fitIcon').setAttribute('href', cfg.fit ? '#i-shrink' : '#i-expand');
+}
+$('#fitBtn').onclick = async () => { cfg = await window.native.setConfig({ fit: !cfg.fit }); applyFit(); };
+
+// ---------- recent sessions ----------
+async function saveRecent(recent, render = true) {
+  cfg = await window.native.setConfig({ recent });
+  if (render) renderCards();
+}
+function remember(id) {
+  if (!cfg.rememberHistory) return;
+  const old = cfg.recent.find((r) => r.id === id) || { id, name: discovered.find((d) => d.id === id)?.name || '', fav: false };
+  saveRecent([{ ...old, lastAt: Date.now() }, ...cfg.recent.filter((r) => r.id !== id)]);
+  online.add(id);
+}
+function saveThumb(sess) {
+  const v = $('#video');
+  if (!cfg.rememberHistory || !cfg.saveThumbnails || viewSess !== sess || !v.videoWidth) return;
+  const c = document.createElement('canvas');
+  c.width = 320; c.height = Math.round(320 * v.videoHeight / v.videoWidth);
+  c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
+  const thumb = c.toDataURL('image/jpeg', 0.6);
+  saveRecent(cfg.recent.map((r) => (r.id === sess.peer ? { ...r, thumb } : r)));
+}
+function gradient(id) {
+  const h = [...id].reduce((a, d) => (a * 31 + +d) % 360, 7);
+  return `linear-gradient(135deg,hsl(${h},28%,34%),hsl(${(h + 30) % 360},32%,14%))`;
+}
+
+let section = 'recent';
+function renderCards(animate = false) {
+  const el = $('#cards');
+  el.classList.toggle('anim', animate);
+  const disc = section === 'disc';
+  const list = disc ? discovered.map((d) => cfg.recent.find((r) => r.id === d.id) || d)
+    : section === 'fav' ? cfg.recent.filter((r) => r.fav) : cfg.recent;
+  if (!list.length) {
+    el.innerHTML = disc
+      ? `<div class="empty">${ic('wifi')}Open JiriDesk on another computer on this network and it will appear here.</div>`
+      : section === 'fav'
+      ? `<div class="empty">${ic('star')}Click the star on a session to add it here.</div>`
+      : `<div class="empty">${ic('monitor')}Computers you connect to will appear here.</div>`;
+    return;
+  }
+  el.innerHTML = list.map((r, n) => {
+    const on = isOnline(r.id);
+    const bg = r.thumb && /^data:image\/jpeg;base64,[A-Za-z0-9+/=]+$/.test(r.thumb) ? `url(${r.thumb})` : gradient(r.id);
+    return `<div class="card" data-id="${esc(r.id)}" style="--n:${Math.min(n, 12)}">
+      <div class="thumb" style="background-image:${bg}"></div>
+      <div class="shade"></div>
+      ${disc ? '' : `<div class="acts">
+        <button class="mini" data-edit="${esc(r.id)}" data-tip="Rename" aria-label="Rename">${ic('pencil')}</button>
+        <button class="mini ${r.fav ? 'fav' : ''}" data-fav="${esc(r.id)}" data-tip="Favorite" aria-label="Favorite">${ic('star')}</button>
+      </div>`}
+      <div class="meta">
+        <i class="pres ${on ? 'on' : ''}"></i>
+        <div class="txt">
+          <div class="n">${esc(r.name || fmt(r.id))}</div>
+          <div class="s">${esc(fmt(r.id))} · ${on ? 'Online' : 'Offline'}</div>
+        </div>
+        <span class="enter">${ic('arrow')}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+// Presence refreshes often, so it updates the cards in place instead of redrawing them.
+function showDiscovered(devices) {
+  discovered = devices;
+  if (section === 'disc') renderCards();
+  else updatePresence();
+}
+function updatePresence() {
+  document.querySelectorAll('.card').forEach((c) => {
+    const on = isOnline(c.dataset.id);
+    c.querySelector('.pres').classList.toggle('on', on);
+    c.querySelector('.s').textContent = `${fmt(c.dataset.id)} · ${on ? 'Online' : 'Offline'}`;
+  });
+}
+$('#sections').onclick = (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  section = b.dataset.s;
+  document.querySelectorAll('#sections button').forEach((x) => x.classList.toggle('on', x === b));
+  renderCards(true);
+};
+$('#cards').onclick = (e) => {
+  const f = e.target.closest('[data-fav]');
+  if (f) {
+    const recent = cfg.recent.map((r) => (r.id === f.dataset.fav ? { ...r, fav: !r.fav } : r));
+    if (section === 'fav') return saveRecent(recent);
+    f.classList.toggle('fav');
+    f.classList.remove('popped'); void f.offsetWidth; f.classList.add('popped');
+    return saveRecent(recent, false);
+  }
+  const ed = e.target.closest('[data-edit]');
+  if (ed) {
+    const r = cfg.recent.find((x) => x.id === ed.dataset.edit);
+    return ask({ title: 'Rename', text: fmt(r.id), ok: 'Save', icon: 'check', type: 'text', placeholder: 'Name, e.g. Office PC', value: r.name || '' },
+      (name) => saveRecent(cfg.recent.map((x) => (x.id === r.id ? { ...x, name: name.trim().slice(0, 40) } : x))));
+  }
+  const c = e.target.closest('.card');
+  if (c) startConnect(c.dataset.id);
+};
+
+// ---------- modal ----------
+let modalDone = null;
+function ask({ title, text, ok, icon, type, placeholder, value }, done) {
+  $('#modalTitle').textContent = title;
+  $('#modalText').textContent = text;
+  $('#modalOk').dataset.tip = ok;
+  $('#modalOk').setAttribute('aria-label', ok);
+  $('#modalIcon').setAttribute('href', `#i-${icon}`);
+  const input = $('#modalInput');
+  input.type = type; input.placeholder = placeholder; input.value = value || '';
+  modalDone = done;
+  $('#modal').classList.add('on');
+  input.focus();
+}
+const closeModal = () => { $('#modal').classList.remove('on'); $('#modalInput').value = ''; modalDone = null; };
+$('#modalCancel').onclick = closeModal;
+$('#modalForm').onsubmit = (e) => {
+  e.preventDefault();
+  const done = modalDone, value = $('#modalInput').value;
+  closeModal();
+  if (done) done(value);
+};
+
+// ---------- address bar / menu ----------
+$('#remote').oninput = (e) => {
+  const d = e.target.value.replace(/\D/g, '').slice(0, 9);
+  e.target.value = d.replace(/(\d{3})(?=\d)/g, '$1 ');
+  $('#go').classList.toggle('ready', d.length === 9);
+};
+$('#go').onclick = () => startConnect($('#remote').value);
+$('#remote').onkeydown = (e) => { if (e.key === 'Enter') startConnect($('#remote').value); };
+// Briefly turns a copy button into a check mark.
+function confirmCopy(btn) {
+  const use = btn.querySelector('use'), original = use.getAttribute('href');
+  use.setAttribute('href', '#i-check');
+  btn.classList.add('done');
+  clearTimeout(btn.copyTimer);
+  btn.copyTimer = setTimeout(() => { use.setAttribute('href', btn.dataset.icon); btn.classList.remove('done'); }, 1400);
+  btn.dataset.icon = btn.dataset.icon || original;
+}
+$('#copyId').onclick = (e) => {
+  window.native.copy(fmt(cfg.id));
+  confirmCopy(e.currentTarget);
+};
+$('#invite').onclick = (e) => {
+  window.native.copy(`Connect to my computer with JiriDesk. My ID is ${fmt(cfg.id)}.`);
+  confirmCopy(e.currentTarget);
+  toast('Invite copied. Your password is not included.');
+};
+$('#burger').onclick = (e) => { e.stopPropagation(); $('#menu').classList.toggle('open'); };
+document.addEventListener('click', () => $('#menu').classList.remove('open'));
+$('#menu').onclick = (e) => {
+  const b = e.target.closest('[data-open]');
+  if (b) openSettings(b.dataset.open);
+};
+$('#exit').onclick = () => window.native.exit();
+
+// ---------- tabs ----------
+function show(view) {
+  document.querySelectorAll('.view').forEach((v) => v.classList.toggle('on', v.id === view));
+  $('#tabHome').classList.toggle('on', view === 'home');
+  $('#tabSession').classList.toggle('on', view === 'session');
+  $('#tabSettings').classList.toggle('on', view === 'settings');
+  if (view === 'settings') moveMarker();
+}
+$('#tabHome').onclick = () => show('home');
+$('#tabSession').onclick = () => show('session');
+$('#tabSettings').onclick = () => show('settings');
+$('#closeSettings').onclick = (e) => { e.stopPropagation(); $('#tabSettings').classList.add('gone'); show(viewSess ? 'session' : 'home'); };
+function openSettings(p) { $('#tabSettings').classList.remove('gone'); page(p); show('settings'); }
+
+// ---------- tooltips ----------
+let tipTimer;
+const hideTip = () => { clearTimeout(tipTimer); $('#tip').classList.remove('on'); };
+document.addEventListener('mouseover', (e) => {
+  const t = e.target.closest('[data-tip]');
+  if (!t) return hideTip();
+  clearTimeout(tipTimer);
+  tipTimer = setTimeout(() => {
+    const tip = $('#tip'), r = t.getBoundingClientRect();
+    tip.textContent = t.dataset.tip;
+    const x = Math.max(6, Math.min(innerWidth - tip.offsetWidth - 6, r.left + r.width / 2 - tip.offsetWidth / 2));
+    const below = r.bottom + 6 + tip.offsetHeight < innerHeight;
+    tip.style.transform = `translate(${x}px,${below ? r.bottom + 6 : r.top - tip.offsetHeight - 6}px)`;
+    tip.classList.add('on');
+  }, 350);
+});
+document.addEventListener('mousedown', hideTip);
+
+// ---------- settings ----------
+const row = (label, control, cls = '') => `<div class="row ${cls}"><span>${label}</span><span class="end">${control}</span></div>`;
+const chk = (key, label) => `<label class="row"><span>${label}</span><input type="checkbox" data-flag="${key}" ${cfg[key] ? 'checked' : ''}></label>`;
+const soon = (label) => row(label, '<span class="soon">soon</span><input type="checkbox" disabled>', 'off');
+const sel = (key, opts) => `<select data-choice="${key}">${opts.map(([v, l]) => `<option value="${v}" ${cfg[key] === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+const tool = (id, icon, tip, cls = '') => `<button class="ib ${cls}" id="${id}" data-tip="${tip}" aria-label="${tip}">${ic(icon)}</button>`;
+const adminHelp = () => {
+  if (cfg.runAsAdmin && !admin.active) return 'Admin control could not start. Restart JiriDesk, or turn this off and on again.';
+  return 'Lets anyone with full control use Task Manager, installers and other admin programs on this computer. Windows asks you once. UAC prompts and the lock screen stay out of reach.';
+};
+const PROFILES = [['view', 'View only'], ['control', 'Full control'], ['unattended', 'Unattended']];
+const PROFILE_HELP = {
+  view: 'Everyone who connects can only watch, with or without a password.',
+  control: 'Connections with a password get full control. For the others, you choose when you accept.',
+  unattended: 'Connections with a password get full control. Connections you accept by hand can only watch.',
+};
+const pages = {
+  General: () => `<h2>General</h2>
+    <div class="group">
+      ${row('Theme', sel('theme', [['system', 'Use system settings'], ['dark', 'Dark'], ['light', 'Light']]))}
+      ${chk('startWithWindows', 'Start with Windows')}
+      ${chk('trayOnClose', 'Keep running in the tray when closed')}
+      ${chk('notifications', 'Notify me when someone connects')}
+      ${chk('sound', 'Play a sound on an incoming request')}
+    </div>`,
+  Connection: () => `<h2>Connection</h2>
+    <h3>Server</h3>
+    <div class="group"><div class="inline"><input type="text" id="serverInput" value="${esc(cfg.server)}" placeholder="ws://host:3001, ws://other-host:3001" aria-label="Server addresses">${tool('saveServer', 'check', 'Save', 'solid')}</div></div>
+${''}    <div class="group"><input id="serverAccessKey" type="password" maxlength="256" value="${esc(cfg.serverAccessKey)}" placeholder="Server access key (optional)" aria-label="Server access key"></div>
+    <p class="hint">Addresses are tried in order, separated by commas, and the first that answers is used. They must all reach the same server. For a private internet server, use its wss:// address and access key on both devices.</p>`,
+  Access: () => `<h2>Access</h2>
+    <h3>Unattended access</h3>
+    <div class="group">
+      ${chk('allowPassword', 'Allow access with a password')}
+      <div class="row"><div class="inline" style="flex:1;padding:3px 0">
+        <input type="password" id="pwInput" value="${esc(cfg.password)}" maxlength="64" aria-label="Password" placeholder="Password">
+        ${tool('pwEye', 'eye', 'Show password')}${tool('newPw', 'refresh', 'Generate a random password')}${tool('savePw', 'check', 'Save password', 'solid')}
+      </div></div>
+    </div>
+    <p class="hint">At least 8 characters.</p>
+    <h3>Without a password</h3>
+    <div class="group">${row('Incoming connections', sel('interactive', [['ask', 'Ask me to accept'], ['never', 'Never allow']]))}</div>`,
+  Permissions: () => `<h2>Permissions</h2>
+    <h3>Profile</h3>
+    <div class="segctl" id="profiles" style="--idx:${PROFILES.findIndex(([p]) => p === cfg.profile)}">
+      <div class="segthumb"></div>
+      ${PROFILES.map(([p, l]) => `<button class="chip ${p === cfg.profile ? 'on' : ''}" data-profile="${p}">${l}</button>`).join('')}
+    </div>
+    <p class="hint" id="profileHelp">${PROFILE_HELP[cfg.profile]}</p>
+    <h3>With control, they can</h3>
+    <div class="group">
+      ${row('Use my mouse and keyboard', '<input type="checkbox" checked disabled>')}
+      ${chk('syncClipboard', 'Share the clipboard during full control sessions')}
+      ${admin.available ? `<label class="row"><span>Use programs that run as administrator</span><input type="checkbox" id="runAsAdmin" ${cfg.runAsAdmin ? 'checked' : ''}></label>` : ''}
+      ${soon('Restart my device')}${soon('Send Ctrl+Alt+Del')}
+    </div>
+    ${admin.available ? `<p class="hint">${adminHelp()}</p>` : ''}`,
+  Privacy: () => `<h2>Privacy</h2>
+    <div class="group">
+      ${chk('rememberHistory', 'Remember recent sessions')}
+      ${chk('saveThumbnails', 'Save session thumbnails')}
+      ${row('Clear history', tool('clearHistory', 'trash', 'Clear history', 'danger'))}
+    </div>
+    <p class="hint">Thumbnails are small pictures of the other screen, stored only on this computer.</p>`,
+  Display: () => `<h2>Display</h2>
+    <div class="group">
+      ${row('Quality', sel('quality', [['balanced', 'Balanced'], ['quality', 'Best quality'], ['speed', 'Best speed']]))}
+      ${chk('fit', 'Fit remote screen to window')}
+    </div>
+    <p class="hint">Quality applies from your next connection.</p>`,
+  About: () => `<h2>About JiriDesk</h2>
+    <div class="group">${row('Version', '0.3.0')}</div>
+    <p class="hint">Remote desktop for personal use.</p>`,
+};
+let currentPage = 'General';
+function moveMarker() {
+  const b = document.querySelector(`#side button[data-p="${currentPage}"]`);
+  if (b) $('#marker').style.setProperty('--y', `${b.offsetTop}px`);
+}
+function page(p, animate = true) {
+  currentPage = p;
+  document.querySelectorAll('#side button').forEach((b) => b.classList.toggle('on', b.dataset.p === p));
+  const pane = $('#pane');
+  pane.classList.remove('anim');
+  pane.innerHTML = pages[p]();
+  if (animate) { void pane.offsetWidth; pane.classList.add('anim'); }
+  moveMarker();
+}
+$('#side').onclick = async (e) => {
+  const b = e.target.closest('[data-p]');
+  if (!b) return;
+  if (b.dataset.p === 'Permissions') admin = await window.native.adminStatus();
+  page(b.dataset.p);
+};
+$('#pane').onchange = async (e) => {
+  const t = e.target;
+  if (t.id === 'runAsAdmin') {
+    t.disabled = true;
+    const { ok, cfg: saved, active } = await window.native.setRunAsAdmin(t.checked);
+    cfg = saved;
+    admin.active = active;
+    if (!ok) toast('Windows did not allow the change.');
+    page('Permissions', false);
+    return;
+  }
+  if (t.dataset.flag) cfg = await window.native.setConfig({ [t.dataset.flag]: t.checked });
+  if (t.dataset.choice) cfg = await window.native.setConfig({ [t.dataset.choice]: t.value });
+  applyTheme();
+  applyFit();
+};
+$('#pane').onclick = async (e) => {
+  const chip = e.target.closest('[data-profile]');
+  if (chip) {
+    cfg = await window.native.setConfig({ profile: chip.dataset.profile });
+    document.querySelectorAll('.chip').forEach((c) => c.classList.toggle('on', c === chip));
+    $('#profiles').style.setProperty('--idx', PROFILES.findIndex(([p]) => p === cfg.profile));
+    $('#profileHelp').textContent = PROFILE_HELP[cfg.profile];
+    return;
+  }
+  if (e.target.id === 'pwEye') {
+    const pw = $('#pwInput'), showing = pw.type === 'text';
+    pw.type = showing ? 'password' : 'text';
+    e.target.querySelector('use').setAttribute('href', showing ? '#i-eye' : '#i-eyeoff');
+    e.target.dataset.tip = showing ? 'Show password' : 'Hide password';
+    e.target.setAttribute('aria-label', e.target.dataset.tip);
+    return hideTip();
+  }
+  if (e.target.id === 'savePw') {
+    const pw = $('#pwInput').value.trim();
+    if (pw.length < 8) return toast('The password must have at least 8 characters.');
+    cfg = await window.native.setConfig({ password: pw });
+    page('Access', false);
+    toast('Password saved.');
+  }
+  if (e.target.id === 'newPw') {
+    const pw = Array.from(crypto.getRandomValues(new Uint8Array(5))).map((b) => b.toString(16).padStart(2, '0')).join('');
+    cfg = await window.native.setConfig({ password: pw });
+    page('Access', false);
+    $('#pwEye').click();
+    toast('New password set.');
+  }
+  if (e.target.id === 'saveServer') {
+    const value = $('#serverInput').value.trim();
+    if (!JiriServers.parseServers(value)) return toast('Each address must start with ws:// or wss://');
+    const serverAccessKey = $('#serverAccessKey').value.trim();
+    if (serverAccessKey && !JiriServers.serversToTry(value, serverAccessKey).length) return toast('A server access key requires a wss:// address.');
+    cfg = await window.native.setConfig({ server: value, serverAccessKey });
+    toast('Saved. Reconnecting…');
+    const old = ws;
+    ws = null;
+    if (old) { old.onclose = null; old.close(); }
+    serverAttempt = 0;
+    setOnline(false);
+    connectWs();
+  }
+  if (e.target.id === 'clearHistory') {
+    await saveRecent([]);
+    toast('History cleared.');
+  }
+};
+
+init();
+const showUpdate = version => {
+  if (!version) return;
+  $('#updateText').textContent = 'JiriDesk ' + version + ' downloaded and ready.';
+  $('#updateBanner').hidden = false;
+};
+window.native.onUpdateReady(showUpdate);
+window.native.updateStatus().then(showUpdate).catch(() => {});
+$('#updateButton').onclick = async () => {
+  if (hostSess || viewSess) return toast('Disconnect your remote session before updating.');
+  const button = $('#updateButton');
+  button.disabled = true;
+  try {
+    if (await window.native.installUpdate()) return;
+  } catch {}
+  button.disabled = false;
+  toast('Could not start the update. Try again after restarting JiriDesk.');
+};
+</script>
+</body>
+</html>

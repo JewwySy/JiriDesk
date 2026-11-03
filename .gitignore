@@ -1,0 +1,14 @@
+node_modules/
+app/dist/
+site/downloads/
+server/logs/
+hosted-site/
+.claude/
+.openai/
+*.tar.gz
+.env
+.env.*
+*.log
+*.exe
+*.pfx
+*.pem
